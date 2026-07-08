@@ -1,9 +1,16 @@
-import json
+﻿import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
-from src.datasets.hotpotqa_loader import load_cached_jsonl, normalize_hotpot_record, save_jsonl
+from src.datasets.hotpotqa_loader import (
+    DEFAULT_HOTPOTQA_DATASET,
+    load_cached_jsonl,
+    load_hotpotqa_small,
+    normalize_hotpot_record,
+    save_jsonl,
+)
 from src.datasets.schema import QASample
 
 
@@ -44,6 +51,26 @@ class HotpotQALoaderTest(unittest.TestCase):
             loaded = load_cached_jsonl(path)
 
         self.assertEqual(loaded, [sample])
+
+    def test_loader_uses_namespaced_hotpotqa_dataset_by_default(self):
+        fake_dataset = [
+            {
+                "id": "s1",
+                "question": "Q?",
+                "answer": "A",
+                "context": [["Doc", ["Evidence."]]],
+                "supporting_facts": [["Doc", 0]],
+            }
+        ]
+        load_dataset = Mock(return_value=fake_dataset)
+        fake_module = type("DatasetsModule", (), {"load_dataset": load_dataset})
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict("sys.modules", {"datasets": fake_module}):
+                samples = load_hotpotqa_small(Path(tmpdir) / "cache.jsonl", sample_size=1)
+
+        load_dataset.assert_called_once_with(DEFAULT_HOTPOTQA_DATASET, "distractor", split="validation")
+        self.assertEqual(samples[0].sample_id, "s1")
 
 
 if __name__ == "__main__":

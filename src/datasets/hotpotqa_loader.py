@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import random
@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from src.datasets.schema import QASample
+
+
+DEFAULT_HOTPOTQA_DATASET = "hotpotqa/hotpot_qa"
+DEFAULT_HOTPOTQA_CONFIG = "distractor"
 
 
 def normalize_hotpot_record(record: dict[str, Any]) -> QASample:
@@ -88,6 +92,8 @@ def load_hotpotqa_small(
     split: str = "validation",
     seed: int = 42,
     force_download: bool = False,
+    dataset_name: str = DEFAULT_HOTPOTQA_DATASET,
+    dataset_config: str = DEFAULT_HOTPOTQA_CONFIG,
 ) -> list[QASample]:
     cache = Path(cache_path)
     if cache.exists() and not force_download:
@@ -101,7 +107,7 @@ def load_hotpotqa_small(
             "Install datasets or provide data/processed/hotpotqa_small.jsonl."
         ) from exc
 
-    dataset = load_dataset("hotpot_qa", "distractor", split=split)
+    dataset = load_dataset(dataset_name, dataset_config, split=split)
     indices = list(range(len(dataset)))
     random.Random(seed).shuffle(indices)
     selected = [normalize_hotpot_record(dataset[index]) for index in indices[:sample_size]]

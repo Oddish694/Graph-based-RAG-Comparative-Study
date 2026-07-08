@@ -27,6 +27,8 @@ def run_phase1_vector_rag(config: dict[str, Any]) -> dict[str, float]:
             sample_size=int(config.get("sample_size", 100)),
             split=str(config.get("split", "validation")),
             seed=int(config.get("seed", 42)),
+            dataset_name=str(config.get("dataset_name", "hotpotqa/hotpot_qa")),
+            dataset_config=str(config.get("dataset_config", "distractor")),
         )
 
     chunk_config = config.get("chunking", {})
@@ -128,3 +130,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
