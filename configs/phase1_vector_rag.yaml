@@ -1,0 +1,19 @@
+﻿seed: 42
+dataset_path: data/processed/hotpotqa_small_smoke.jsonl
+output_dir: results/phase1_vector_rag
+
+chunking:
+  strategy: fixed
+  chunk_size: 64
+  overlap: 8
+
+embedding:
+  type: hashing
+  dimensions: 384
+
+retrieval:
+  method: vector
+  top_k: 5
+
+metrics:
+  k_values: [1, 3, 5]

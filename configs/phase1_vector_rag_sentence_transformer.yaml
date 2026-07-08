@@ -1,0 +1,22 @@
+﻿seed: 42
+dataset_path: data/processed/hotpotqa_small.jsonl
+output_dir: results/phase1_vector_rag_sentence_transformer
+sample_size: 100
+split: validation
+
+chunking:
+  strategy: fixed
+  chunk_size: 128
+  overlap: 20
+
+embedding:
+  type: sentence_transformers
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  device: cpu
+
+retrieval:
+  method: vector
+  top_k: 5
+
+metrics:
+  k_values: [1, 3, 5]

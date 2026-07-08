@@ -1,0 +1,83 @@
+project:
+  name: "Graph-based RAG Frameworks: Reproduction, Comparative Study and Ablation Analysis"
+  seed: 42
+
+datasets:
+  - name: hotpotqa_small
+    source: hotpotqa
+    split: validation
+    sample_size: 1000
+  - name: 2wikimultihopqa_small
+    source: 2wikimultihopqa
+    split: validation
+    sample_size: 1000
+
+systems:
+  - naive_rag
+  - vector_rag
+  - hybrid_rag
+  - graph_rag_style
+  - lightrag
+  - improved_lightrag
+
+chunking:
+  strategies:
+    - fixed
+    - recursive
+    - semantic
+  sizes:
+    - 256
+    - 512
+    - 1024
+  overlap:
+    - 50
+
+embeddings:
+  - bge-small
+  - bge-base
+  - bge-m3
+  - text2vec
+
+retrievers:
+  - bm25
+  - dense
+  - hybrid
+  - graph_aware
+
+top_k:
+  - 3
+  - 5
+  - 10
+  - 20
+
+rerankers:
+  - none
+  - bge-reranker
+  - cross-encoder
+
+query_enhancement:
+  - none
+  - query_rewrite
+  - hyde
+
+metrics:
+  retrieval:
+    - recall_at_k
+    - precision_at_k
+    - mrr
+    - ndcg
+    - hit_rate
+  generation:
+    - exact_match
+    - f1
+    - faithfulness
+    - answer_relevance
+    - context_precision
+    - context_recall
+  efficiency:
+    - index_time
+    - retrieval_latency
+    - query_latency
+    - token_usage
+    - storage_size
+

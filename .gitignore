@@ -1,0 +1,13 @@
+﻿__pycache__/
+*.py[cod]
+.venv/
+.env
+.vscode/
+data/raw/
+data/processed/*
+!data/processed/hotpotqa_small_smoke.jsonl
+results/**/*.csv
+results/**/*.json
+results/**/*.jsonl
+results/**/*.parquet
+*.log
