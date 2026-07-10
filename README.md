@@ -9,9 +9,10 @@ English summary: This project builds a reproducible experimental framework for c
 本项目围绕下面几个问题展开：
 
 1. 普通 Vector RAG 在多跳问答任务中能找回多少正确证据？
-2. GraphRAG-style RAG 或 LightRAG 是否能比普通向量检索更好地覆盖多跳证据？
-3. chunk size、embedding model、retriever、top-k、reranker、query rewrite 等组件分别会怎样影响检索质量和系统延迟？
-4. 如果图增强方法效果更好，它带来的索引成本、查询延迟和实现复杂度是否值得？
+2. Hybrid RAG 是否能通过 BM25 + dense retrieval 提高检索稳定性？
+3. GraphRAG-style RAG 或 LightRAG 是否能比普通向量检索更好地覆盖多跳证据？
+4. reranker、query rewrite 等轻量增强策略能否进一步提高检索质量或回答质量？
+5. 如果图增强方法效果更好，它带来的索引成本、查询延迟和实现复杂度是否值得？
 
 ## 当前实现状态
 
@@ -46,11 +47,25 @@ Phase 1 真实实验结果：
 
 这些结果说明：普通向量检索通常能在 top-5 中命中至少一个相关证据，但在多跳问答中仍然不能完全找齐所有 supporting facts。这正是后续 GraphRAG / LightRAG 需要尝试改进的地方。
 
+## Roadmap / 阶段路线图
+
+总体目标会按下面的阶段逐步实现。现在不是只做 Vector RAG，而是先用 Vector RAG 建立 baseline，再逐步加入 Hybrid、GraphRAG-style、LightRAG 和改进策略。
+
+| 阶段 | 方法 | 目标 | 状态 |
+| --- | --- | --- | --- |
+| Phase 1 | Vector RAG baseline | 建立普通 dense retrieval 对照组 | 已完成 |
+| Phase 2 | Hybrid RAG baseline | 实现 BM25 + dense retrieval 融合，比较 lexical 和 semantic retrieval | 待实现 |
+| Phase 3 | GraphRAG-style RAG | 抽取实体和关系，构建轻量图结构，测试图检索是否提升多跳证据召回 | 待实现 |
+| Phase 4 | LightRAG controlled integration | 将 LightRAG 纳入统一数据、统一 query、统一指标的评估框架 | 待实现 |
+| Phase 5 | Improved LightRAG / improved graph retrieval | 加入 reranker 或 query rewrite，评估质量收益和延迟成本 | 待实现 |
+| Phase 6 | Ablation and reporting | 做 chunk size、top-k、embedding、retriever、reranker 等消融实验并写报告 | 待实现 |
+
+更细的工程任务拆分见 `docs/implementation_plan.md`。
+
 ## 方法对比范围
 
 | Method | 中文说明 | English description |
 | --- | --- | --- |
-| Naive RAG | 最基础的 chunk 检索加生成流程 | Basic chunk retrieval plus generation |
 | Vector RAG | 基于 embedding 相似度的向量检索 baseline | Dense embedding retrieval baseline |
 | Hybrid RAG | BM25 关键词检索加向量检索融合 | BM25 plus dense retrieval |
 | GraphRAG-style RAG | 抽取实体关系并构建图，再进行图感知检索 | Entity-relation graph construction and graph-aware retrieval |
@@ -95,28 +110,27 @@ Efficiency metrics：
 ## 项目结构
 
 ```text
-.
-├── README.md
-├── configs/
-│   ├── experiment_matrix.yaml
-│   ├── phase1_vector_rag.yaml
-│   └── phase1_vector_rag_sentence_transformer.yaml
-├── docs/
-│   ├── experiment_plan.md
-│   ├── implementation_plan.md
-│   ├── phase1_details.md
-│   ├── project_brief.md
-│   └── resume_notes.md
-├── experiments/
-│   └── run_phase1_vector_rag.ps1
-├── src/
-│   ├── chunking/
-│   ├── datasets/
-│   ├── evaluation/
-│   ├── indexing/
-│   ├── retrieval/
-│   └── run_experiment.py
-└── tests/
+README.md
+configs/
+  experiment_matrix.yaml
+  phase1_vector_rag.yaml
+  phase1_vector_rag_sentence_transformer.yaml
+docs/
+  experiment_plan.md
+  implementation_plan.md
+  phase1_details.md
+  project_brief.md
+  resume_notes.md
+experiments/
+  run_phase1_vector_rag.ps1
+src/
+  chunking/
+  datasets/
+  evaluation/
+  indexing/
+  retrieval/
+  run_experiment.py
+tests/
 ```
 
 ## 快速运行
@@ -150,7 +164,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\experiments\run_phase1_vec
 
 中文：
 
-> 构建面向 HotpotQA 多跳问答的 RAG 对比实验框架，实现数据标准化、文本切块、向量检索、检索指标评估与配置化实验流程；在 100 条 HotpotQA validation 样本上完成 Vector RAG baseline，取得 Recall@5 0.74、MRR@5 0.8275、Hit Rate@5 0.95，为后续 GraphRAG / LightRAG 对比实验提供可复现基线。
+> 构建面向 HotpotQA 多跳问答的 RAG 对比实验框架，实现数据标准化、文本切块、向量检索、检索指标评估与配置化实验流程；在 100 条 HotpotQA validation 样本上完成 Vector RAG baseline，取得 Recall@5 0.74、MRR@5 0.8275、Hit Rate@5 0.95，为后续 Hybrid RAG、GraphRAG-style RAG 和 LightRAG 对比实验提供可复现基线。
 
 English:
 
