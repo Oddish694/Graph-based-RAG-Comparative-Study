@@ -1,0 +1,23 @@
+seed: 42
+dataset_path: data/processed/hotpotqa_small_smoke.jsonl
+output_dir: results/phase2_hybrid_rag
+
+chunking:
+  strategy: fixed
+  chunk_size: 64
+  overlap: 8
+
+embedding:
+  type: hashing
+  dimensions: 384
+
+retrieval:
+  method: hybrid
+  top_k: 5
+  candidate_k: 20
+  bm25_weight: 0.5
+  dense_weight: 0.5
+  fusion: weighted
+
+metrics:
+  k_values: [1, 3, 5]
