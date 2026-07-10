@@ -1,16 +1,26 @@
-# Graph-based RAG Comparative Study Implementation Plan
+# 实施计划 / Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+## 总体目标
 
-**Goal:** Build a reproducible experiment framework for comparing Naive RAG, Vector RAG, GraphRAG-style RAG and LightRAG with controlled ablation studies.
+构建一个可复现的 RAG 对比实验框架，用于比较 Vector RAG、Hybrid RAG、GraphRAG-style RAG、LightRAG 以及改进版 LightRAG 在多跳问答任务上的效果。
 
-**Architecture:** The project is organized around independent modules for dataset loading, chunking, indexing, retrieval, generation, evaluation and reporting. Each experiment is driven by YAML configuration so that component comparisons can be repeated without changing code.
+框架采用模块化设计：数据加载、文本切块、索引构建、检索、生成、评估和结果报告相互解耦。实验通过 YAML 配置驱动，避免每次修改代码才能改变实验参数。
 
-**Tech Stack:** Python, Hugging Face datasets, sentence-transformers, FAISS or Chroma, rank-bm25, NetworkX, pandas, matplotlib, seaborn, RAGAS-compatible metrics, LightRAG integration.
+## 技术栈
 
----
+- Python
+- Hugging Face datasets
+- sentence-transformers
+- numpy / pandas
+- PyYAML
+- scikit-learn
+- FAISS 或 Chroma，后续扩展
+- rank-bm25，后续扩展
+- NetworkX，后续用于图结构
+- matplotlib / seaborn，后续用于图表
+- LightRAG，后续集成
 
-## File Structure
+## 目录结构
 
 ```text
 src/
@@ -19,302 +29,168 @@ src/
 │   └── schema.py
 ├── chunking/
 │   ├── fixed_chunker.py
-│   ├── recursive_chunker.py
-│   └── semantic_chunker.py
+│   └── recursive_chunker.py
 ├── indexing/
-│   ├── vector_index.py
-│   ├── bm25_index.py
-│   └── graph_index.py
+│   └── vector_index.py
 ├── retrieval/
 │   ├── naive_rag.py
-│   ├── vector_rag.py
-│   ├── hybrid_rag.py
-│   ├── graph_rag_style.py
-│   └── lightrag_runner.py
-├── enhancement/
-│   ├── reranker.py
-│   ├── query_rewrite.py
-│   └── hyde.py
+│   └── vector_rag.py
 ├── evaluation/
-│   ├── retrieval_metrics.py
-│   ├── answer_metrics.py
-│   └── efficiency_metrics.py
-├── reporting/
-│   ├── tables.py
-│   └── plots.py
+│   └── retrieval_metrics.py
 └── run_experiment.py
 ```
 
-## Phase 1: Minimal Reproducible Loop
+后续会继续扩展：
 
-### Task 1: Dataset Schema and HotpotQA Loader
+```text
+src/indexing/bm25_index.py
+src/indexing/graph_index.py
+src/retrieval/hybrid_rag.py
+src/retrieval/graph_rag_style.py
+src/retrieval/lightrag_runner.py
+src/enhancement/reranker.py
+src/enhancement/query_rewrite.py
+src/reporting/tables.py
+src/reporting/plots.py
+```
 
-**Files:**
+## Phase 1：最小可复现实验闭环
 
-- Create: `src/datasets/schema.py`
-- Create: `src/datasets/hotpotqa_loader.py`
-- Create: `tests/test_hotpotqa_loader.py`
+目标：先实现 HotpotQA 小样本上的 Vector RAG baseline，跑通从数据到指标的完整链路。
 
-- [ ] **Step 1: Define a normalized QA sample schema**
+### Task 1：Dataset Schema and HotpotQA Loader
 
-Implement a `QASample` dataclass with fields for `sample_id`, `question`, `answer`, `contexts` and `supporting_facts`.
+已完成内容：
 
-- [ ] **Step 2: Load a small HotpotQA split**
+- 定义 `QASample` dataclass
+- 从 Hugging Face `hotpotqa/hotpot_qa` 加载 validation split
+- 支持本地 JSONL 缓存
+- 将原始 HotpotQA 格式转换成统一 schema
+- 保留 question、answer、contexts、supporting_facts
+- 添加 loader 单元测试
 
-Use Hugging Face datasets to load a fixed number of validation samples and convert them to `QASample`.
+意义：统一数据入口，保证后续所有 RAG 方法使用同一批样本和同一套 gold evidence。
 
-- [ ] **Step 3: Add loader tests**
+### Task 2：Chunking Module
 
-Test that every loaded sample has a non-empty question, answer and context list.
+已完成内容：
 
-- [ ] **Step 4: Save a cached JSONL subset**
+- 实现 fixed-size chunking
+- 支持 chunk size 和 overlap
+- 每个 chunk 保留 sample_id、doc_id、title、chunk_id、text 等元数据
+- 添加 chunk 边界和非空文本测试
 
-Save the selected subset to `data/processed/hotpotqa_small.jsonl` so later experiments do not depend on repeated downloads.
+意义：把长 context document 切成适合 embedding 和 retrieval 的短文本块，同时保留评估所需的来源信息。
 
-### Task 2: Chunking Module
+### Task 3：Vector RAG Baseline
 
-**Files:**
+已完成内容：
 
-- Create: `src/chunking/fixed_chunker.py`
-- Create: `src/chunking/recursive_chunker.py`
-- Create: `tests/test_chunking.py`
+- 实现 hashing embedding，用于离线 smoke test
+- 实现 sentence-transformers embedding adapter
+- 实现本地向量索引 `VectorIndex`
+- 实现 `VectorRAGRetriever`
+- 返回 top-k chunks、score、doc_id、chunk_id 和 text
+- 添加检索格式测试
 
-- [ ] **Step 1: Implement fixed-size chunking**
+意义：建立普通 dense retrieval baseline，作为后续 GraphRAG / LightRAG 的对照组。
 
-Split context documents into token-like windows with configurable chunk size and overlap.
+### Task 4：Retrieval Metrics
 
-- [ ] **Step 2: Implement recursive chunking**
+已完成内容：
 
-Split by paragraph, sentence and fallback character length.
+- 实现 Recall@k
+- 实现 MRR@k
+- 实现 Hit Rate@k
+- 支持多组 k 值，例如 1、3、5
+- 添加 synthetic examples 测试
 
-- [ ] **Step 3: Test chunk boundaries**
+意义：自动衡量检索器能否找回 HotpotQA 标注的 supporting facts。
 
-Verify that chunk IDs are stable and chunk text is never empty.
+### Task 5：Experiment Runner
 
-### Task 3: Vector RAG Baseline
+已完成内容：
 
-**Files:**
+- 读取 YAML 实验配置
+- 运行 dataset loading、chunking、indexing、retrieval、evaluation
+- 输出 per-query CSV
+- 输出 aggregate metrics JSON
+- 添加 runner 测试
+- 提供 PowerShell 入口脚本
 
-- Create: `src/indexing/vector_index.py`
-- Create: `src/retrieval/vector_rag.py`
-- Create: `tests/test_vector_retrieval.py`
+意义：把模块组合成一键可复现实验流程。
 
-- [ ] **Step 1: Wrap sentence-transformers embeddings**
+## Phase 1 当前结果
 
-Expose an embedding interface that accepts a list of texts and returns vectors.
+已完成真实实验：
 
-- [ ] **Step 2: Build a local vector index**
+- Dataset：HotpotQA validation
+- Sample size：100
+- Embedding：sentence-transformers/all-MiniLM-L6-v2
+- Retriever：Vector RAG
+- Top-k：5
 
-Use FAISS or Chroma to store chunk embeddings and metadata.
+结果：
 
-- [ ] **Step 3: Retrieve top-k contexts**
+| Metric | Value |
+| --- | --- |
+| Recall@1 | 0.375 |
+| Recall@3 | 0.65 |
+| Recall@5 | 0.74 |
+| MRR@1 | 0.75 |
+| MRR@3 | 0.82 |
+| MRR@5 | 0.8275 |
+| Hit Rate@1 | 0.75 |
+| Hit Rate@3 | 0.92 |
+| Hit Rate@5 | 0.95 |
 
-Return ranked contexts with scores, document IDs and chunk IDs.
+解释：Vector RAG 通常可以命中至少一个相关证据，但在多跳问答中还不能完全找齐所有 supporting facts，因此后续图增强方法有明确的改进空间。
 
-- [ ] **Step 4: Test retrieval output format**
+## Phase 2：LightRAG 复现与对比
 
-Verify that retrieval always returns at most `k` results and preserves metadata.
+目标：在相同 HotpotQA subset 上运行 LightRAG，并与 Phase 1 的 Vector RAG baseline 对比。
 
-### Task 4: Retrieval Metrics
+计划任务：
 
-**Files:**
+- 定义 LightRAG 输入适配器
+- 将 QASample contexts 转成 LightRAG 需要的 document 格式
+- 固定 query mode 和 top-k 参数
+- 捕获 retrieved contexts、answer、latency 和 token usage
+- 与 Vector RAG 生成 side-by-side metric table
 
-- Create: `src/evaluation/retrieval_metrics.py`
-- Create: `tests/test_retrieval_metrics.py`
+## Phase 3：消融实验
 
-- [ ] **Step 1: Implement Recall@k**
+目标：系统分析组件对结果的影响。
 
-Compare retrieved chunk metadata with gold supporting facts.
+计划任务：
 
-- [ ] **Step 2: Implement MRR**
+- chunk size 消融
+- top-k 消融
+- embedding model 消融
+- retriever 类型消融
+- reranker 消融
+- query rewrite 消融
 
-Compute reciprocal rank of the first relevant retrieved context.
+## Phase 4：轻量改进
 
-- [ ] **Step 3: Implement Hit Rate**
+目标：在已有 baseline 上加入低成本增强方法。
 
-Return 1 when at least one supporting context appears in top-k.
+优先方向：
 
-- [ ] **Step 4: Test metrics with synthetic examples**
+- reranker-based context selection
+- query rewrite enhanced retrieval
 
-Use small hand-written retrieved lists and gold labels to verify exact values.
+评估重点：质量提升是否值得额外延迟。
 
-### Task 5: First Experiment Runner
+## Phase 5：结果报告
 
-**Files:**
+目标：整理项目成果。
 
-- Create: `src/run_experiment.py`
-- Create: `configs/phase1_vector_rag.yaml`
-- Create: `experiments/run_phase1_vector_rag.ps1`
+计划产出：
 
-- [ ] **Step 1: Parse YAML experiment config**
-
-Load dataset path, chunk settings, embedding model, retriever settings and output path.
-
-- [ ] **Step 2: Run dataset loading, chunking, indexing and retrieval**
-
-Execute the full retrieval loop without LLM generation.
-
-- [ ] **Step 3: Write results to CSV**
-
-Save per-question retrieval results and aggregate metrics under `results/phase1_vector_rag/`.
-
-- [ ] **Step 4: Run the phase 1 script**
-
-Confirm that one small experiment produces a metrics file and a per-query result file.
-
-## Phase 2: LightRAG Reproduction and Comparison
-
-### Task 6: LightRAG Controlled Runner
-
-**Files:**
-
-- Create: `src/retrieval/lightrag_runner.py`
-- Create: `configs/phase2_lightrag.yaml`
-
-- [ ] **Step 1: Define LightRAG input adapter**
-
-Convert normalized dataset contexts into the document format required by LightRAG.
-
-- [ ] **Step 2: Define LightRAG query adapter**
-
-Run each question through LightRAG using fixed query mode and top-k settings.
-
-- [ ] **Step 3: Capture retrieved contexts**
-
-Store retrieved evidence, answer text, latency and token usage when available.
-
-- [ ] **Step 4: Compare LightRAG with Vector RAG**
-
-Run both systems on the same subset and generate a side-by-side metric table.
-
-## Phase 3: Ablation Studies
-
-### Task 7: Chunk and Top-k Ablation
-
-**Files:**
-
-- Create: `configs/ablation_chunk_topk.yaml`
-- Create: `experiments/run_ablation_chunk_topk.ps1`
-
-- [ ] **Step 1: Generate experiment matrix**
-
-Run chunk sizes 256, 512 and 1024 with top-k values 3, 5, 10 and 20.
-
-- [ ] **Step 2: Aggregate results**
-
-Save one row per configuration with retrieval metrics and latency.
-
-- [ ] **Step 3: Plot trends**
-
-Generate line charts for Recall@k, MRR and query latency.
-
-### Task 8: Embedding and Retriever Ablation
-
-**Files:**
-
-- Create: `configs/ablation_embedding_retriever.yaml`
-- Create: `experiments/run_ablation_embedding_retriever.ps1`
-
-- [ ] **Step 1: Compare embedding models**
-
-Run bge-small, bge-base, bge-m3 and text2vec under the same retriever.
-
-- [ ] **Step 2: Compare retrievers**
-
-Run BM25, dense and hybrid retrieval under the same dataset and chunk settings.
-
-- [ ] **Step 3: Write analysis notes**
-
-Summarize when lexical retrieval beats dense retrieval and when hybrid retrieval helps.
-
-## Phase 4: Lightweight Improvement
-
-### Task 9: Reranker Improvement
-
-**Files:**
-
-- Create: `src/enhancement/reranker.py`
-- Create: `configs/improvement_reranker.yaml`
-
-- [ ] **Step 1: Add reranker interface**
-
-Accept query and candidate contexts, then return reranked contexts with new scores.
-
-- [ ] **Step 2: Integrate reranker after initial retrieval**
-
-Retrieve top-20 candidates, rerank them, then pass top-5 to the generator or evaluator.
-
-- [ ] **Step 3: Compare quality and latency**
-
-Report metric gains together with added reranking time.
-
-### Task 10: Query Rewrite Improvement
-
-**Files:**
-
-- Create: `src/enhancement/query_rewrite.py`
-- Create: `configs/improvement_query_rewrite.yaml`
-
-- [ ] **Step 1: Add query rewrite prompt**
-
-Rewrite questions into retrieval-friendly search queries while preserving original meaning.
-
-- [ ] **Step 2: Run retrieval with original and rewritten queries**
-
-Compare retrieval metrics and log representative improved and degraded cases.
-
-- [ ] **Step 3: Analyze failure cases**
-
-Identify cases where query rewriting introduces unsupported assumptions.
-
-## Phase 5: Reporting
-
-### Task 11: Tables and Plots
-
-**Files:**
-
-- Create: `src/reporting/tables.py`
-- Create: `src/reporting/plots.py`
-- Create: `docs/final_report.md`
-
-- [ ] **Step 1: Generate main comparison table**
-
-Include method, Recall@k, MRR, NDCG, latency and storage size.
-
-- [ ] **Step 2: Generate ablation plots**
-
-Create charts for chunk size, top-k, embedding model and reranker impact.
-
-- [ ] **Step 3: Write final report**
-
-Explain setup, results, observations, limitations and future work.
-
-### Task 12: GitHub README Polish
-
-**Files:**
-
-- Modify: `README.md`
-
-- [ ] **Step 1: Add result tables**
-
-Move the most important experiment table into README.
-
-- [ ] **Step 2: Add charts**
-
-Embed saved charts from `assets/`.
-
-- [ ] **Step 3: Add reproduction commands**
-
-Document environment setup, data preparation and experiment commands.
-
-- [ ] **Step 4: Add resume-ready project summary**
-
-Add a concise project summary suitable for recruiters and faculty interviewers.
-
-## Self-review Notes
-
-- The plan covers dataset loading, baselines, metrics, LightRAG comparison, ablations, improvement and reporting.
-- The first phase is intentionally small and can produce a working result before graph-heavy components are added.
-- GraphRAG-style implementation is kept after Vector RAG and LightRAG comparison to avoid early scope explosion.
-- Reranker is prioritized over HyDE because it is easier to evaluate and less likely to introduce unsupported generated assumptions.
-
+- 主对比表格
+- 消融实验图
+- 延迟和成本分析
+- 成功案例与失败案例
+- README polish
+- final_report.md
