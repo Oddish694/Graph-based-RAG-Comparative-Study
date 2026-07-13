@@ -1,0 +1,24 @@
+﻿seed: 42
+dataset_name: hotpotqa/hotpot_qa
+dataset_config: distractor
+split: validation
+sample_size: 100
+dataset_path: data/processed/hotpotqa_small.jsonl
+output_dir: results/phase2_5_fair_vector_rag
+
+chunking:
+  strategy: fixed
+  chunk_size: 64
+  overlap: 8
+
+embedding:
+  type: sentence_transformers
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  device: cpu
+
+retrieval:
+  method: vector
+  top_k: 10
+
+metrics:
+  k_values: [1, 3, 5, 10]

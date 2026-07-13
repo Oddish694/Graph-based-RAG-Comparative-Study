@@ -1,0 +1,19 @@
+﻿seed: 42
+dataset_name: hotpotqa/hotpot_qa
+dataset_config: distractor
+split: validation
+sample_size: 100
+dataset_path: data/processed/hotpotqa_small.jsonl
+output_dir: results/phase2_5_fair_bm25_rag
+
+chunking:
+  strategy: fixed
+  chunk_size: 64
+  overlap: 8
+
+retrieval:
+  method: bm25
+  top_k: 10
+
+metrics:
+  k_values: [1, 3, 5, 10]

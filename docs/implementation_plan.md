@@ -1,86 +1,28 @@
 ﻿# 实施计划 / Implementation Plan
 
-## 1. 总体目标
+## 1. 项目定位
 
-本项目的最终目标是构建一个可复现的 RAG 对比实验框架，用于比较 Vector RAG、BM25、Hybrid RAG、GraphRAG-style RAG、LightRAG 以及改进版 LightRAG 在多跳问答任务上的表现。
+本项目的目标是构建一个可复现的 RAG 对比实验框架，用于研究不同检索增强方法在多跳问答任务上的表现。
 
-这里的“比较”不是只看一个 demo 能不能回答问题，而是在同一套数据、同一套 query、同一套评估指标和同一套实验配置下，系统比较这些方法的：
-
-- 检索效果：Recall@k、MRR@k、Hit Rate@k、NDCG 等。
-- 回答质量：Exact Match、F1、Faithfulness、Answer Relevance 等。
-- 系统效率：索引时间、检索延迟、端到端查询延迟、存储成本、token 使用量。
-- 工程复杂度：是否需要图构建、实体抽取、关系抽取、reranker 或 query rewrite。
+当前项目已经完成 Vector RAG、BM25 和 Hybrid RAG 的基础实验框架，具备数据加载、文本切块、检索器接口、指标评估、配置驱动实验、结果落盘和单元测试能力。后续工作要从“完成 baseline”推进到“验证图增强检索是否能提升多跳证据完整召回”。
 
 项目最终要回答的问题是：
 
-> 在 HotpotQA / 2WikiMultiHopQA 这类多跳问答任务上，图增强 RAG 是否比普通向量 RAG 更能找全证据？如果有效，它的质量提升是否值得额外的延迟和工程成本？
+> 在 HotpotQA / 2WikiMultiHopQA 这类多跳问答任务上，图增强 RAG 是否比普通向量检索和 Hybrid 检索更能找全 supporting facts？如果有效，这种提升是否值得额外的图构建成本、检索延迟和工程复杂度？
 
-## 2. 阶段路线
+本项目优先完成 retrieval-side research loop。也就是说，当前重点不是先做生成答案，而是先把“检索是否找全证据”这件事研究清楚。
 
-| 阶段 | 方法 | 主要目标 | 当前状态 |
-| --- | --- | --- | --- |
-| Phase 1 | Vector RAG baseline | 建立普通 dense retrieval 对照组 | 已完成 |
-| Phase 2 | BM25 + Hybrid RAG baseline | 比较 lexical、dense、hybrid retrieval | 已完成基础版 |
-| Phase 3 | GraphRAG-style RAG | 实现轻量实体关系图检索 | 待实现 |
-| Phase 4 | LightRAG controlled integration | 将 LightRAG 纳入统一评估框架 | 待实现 |
-| Phase 5 | Improved LightRAG / improved graph retrieval | 加入 reranker、query rewrite 或 HyDE | 待实现 |
-| Phase 6 | Ablation and reporting | 做消融实验和结果报告 | 待实现 |
+## 2. 当前已完成内容
 
-这个顺序的原因是：先有最基础的 dense baseline，再加入关键词检索和混合检索，然后再进入图结构方法。这样后续如果 GraphRAG / LightRAG 有提升，才能判断提升到底来自图结构，还是只是来自 BM25、embedding、top-k、chunking 等基础组件。
+### 2.1 Phase 1: Vector RAG baseline，已完成
 
-## 3. 模块结构
-
-```text
-src/
-  datasets/
-    schema.py
-    hotpotqa_loader.py
-    twowiki_loader.py                  # 后续
-  chunking/
-    fixed_chunker.py
-    recursive_chunker.py
-    semantic_chunker.py                # 后续
-  indexing/
-    vector_index.py
-    bm25_index.py                      # Phase 2 已完成
-    graph_index.py                     # Phase 3
-  retrieval/
-    vector_rag.py
-    bm25_rag.py                        # Phase 2 已完成
-    hybrid_rag.py                      # Phase 2 已完成
-    graph_rag_style.py                 # Phase 3
-    lightrag_runner.py                 # Phase 4
-  graph/
-    entity_extractor.py                # Phase 3
-    relation_extractor.py              # Phase 3
-    graph_builder.py                   # Phase 3
-  enhancement/
-    reranker.py                        # Phase 5
-    query_rewrite.py                   # Phase 5
-    hyde.py                            # 可选
-  evaluation/
-    retrieval_metrics.py
-    answer_metrics.py                  # 后续
-    efficiency_metrics.py              # 后续
-  reporting/
-    tables.py                          # Phase 6
-    plots.py                           # Phase 6
-  run_experiment.py
-```
-
-## 4. Phase 1: Vector RAG baseline, 已完成
-
-### 4.1 目标
-
-建立普通向量检索 baseline：
+已实现普通 dense retrieval baseline：
 
 ```text
 question -> embedding -> vector search over chunks -> top-k evidence
 ```
 
-Vector RAG 在本项目中不使用图结构、不做实体关系建模、不加 reranker、不做 query rewrite。它的作用是作为后续所有增强方法的对照组。
-
-### 4.2 已实现文件
+已实现文件：
 
 | 文件 | 作用 |
 | --- | --- |
@@ -95,29 +37,11 @@ Vector RAG 在本项目中不使用图结构、不做实体关系建模、不加
 | `configs/phase1_vector_rag_sentence_transformer.yaml` | 真实 HotpotQA + sentence-transformers 配置 |
 | `experiments/run_phase1_vector_rag.ps1` | PowerShell 运行入口 |
 
-### 4.3 当前结果
+Phase 1 的作用是建立最基础的 dense retrieval 对照组。它不使用图结构、不使用 BM25、不做 reranker、不做 query rewrite。
 
-| Metric | Value |
-| --- | ---: |
-| Recall@1 | 0.375 |
-| Recall@3 | 0.650 |
-| Recall@5 | 0.740 |
-| MRR@1 | 0.750 |
-| MRR@3 | 0.820 |
-| MRR@5 | 0.8275 |
-| Hit Rate@1 | 0.750 |
-| Hit Rate@3 | 0.920 |
-| Hit Rate@5 | 0.950 |
+### 2.2 Phase 2: BM25 + Hybrid RAG baseline，已完成基础版
 
-解释：Vector RAG 在 top-5 中通常能命中至少一个相关证据，但还不能完整找齐所有多跳 supporting facts。这为后续图增强方法提供了明确对照。
-
-## 5. Phase 2: BM25 + Hybrid RAG baseline, 已完成基础版
-
-### 5.1 目标
-
-在 Phase 1 的 Vector RAG 基础上加入 BM25 lexical retrieval，并通过 score fusion 融合 BM25 和 dense retrieval 结果。
-
-Hybrid RAG 的检索流程是：
+已实现 lexical retrieval 和 hybrid retrieval：
 
 ```text
 question
@@ -127,11 +51,7 @@ question
   -> top-k evidence
 ```
 
-### 5.2 为什么要做
-
-Vector RAG 擅长语义相似，但有时会漏掉精确关键词、实体名、年份、专有名词。BM25 擅长 exact match，但不理解语义改写。Hybrid RAG 测试的是“关键词匹配 + 语义匹配”是否能比单独 dense retrieval 更稳。
-
-### 5.3 已实现文件
+已实现文件：
 
 | 文件 | 作用 |
 | --- | --- |
@@ -147,18 +67,7 @@ Vector RAG 擅长语义相似，但有时会漏掉精确关键词、实体名、
 | `tests/test_hybrid_retrieval.py` | fusion 和 top-k 输出测试 |
 | `tests/test_phase2_runner.py` | Phase 2 runner 输出测试 |
 
-### 5.4 核心实现点
-
-- 对每个 chunk 建 BM25 索引，使用 token frequency、document frequency、document length 和 average document length 计算 Okapi BM25 分数。
-- dense retrieval 继续复用 Phase 1 的 `VectorIndex`。
-- Hybrid 检索时先取两路候选集，例如 top-20 BM25 和 top-20 dense。
-- weighted fusion 会分别归一化 BM25 分数和 dense 分数，再按 `bm25_weight` 与 `dense_weight` 加权求和。
-- RRF fusion 使用 reciprocal rank fusion，根据两个排序列表中的名次合并结果，不依赖原始分数尺度。
-- 检索结果统一返回 `doc_id`、`chunk_id`、`text`、`score`、`retriever_source`，便于统一评估。
-
-### 5.5 当前结果
-
-同一批 100 条 HotpotQA validation 样本、同一 chunk 配置、同一 top-k 下：
+当前 100 条 HotpotQA validation 初步结果：
 
 | Method | Recall@1 | Recall@3 | Recall@5 | MRR@5 | Hit Rate@5 | Avg Retrieval Latency |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -166,95 +75,483 @@ Vector RAG 擅长语义相似，但有时会漏掉精确关键词、实体名、
 | BM25 | 0.355 | 0.595 | 0.710 | 0.8200 | 0.990 | 0.0046s |
 | Hybrid RAG | 0.410 | 0.690 | 0.785 | 0.8908 | 0.980 | 0.0158s |
 
-初步解释：Hybrid RAG 的 Recall@5 和 MRR@5 高于单独 Vector RAG 与单独 BM25，说明 lexical matching 和 semantic matching 具有互补性。BM25 的 Hit Rate@5 很高，说明关键词检索经常能碰到至少一个 gold document，但 Recall@5 较低，说明它不一定能找全多跳证据。
+注意：这张表目前只能作为初步结果。历史配置中 Vector RAG 使用过 `chunk_size=128, overlap=20`，BM25 / Hybrid 使用 `chunk_size=64, overlap=8`。后续主结果必须用完全统一的 fair configs 重新跑。
 
-## 6. Phase 3: GraphRAG-style RAG
+## 3. 后续总路线
 
-### 6.1 目标
+后续路线调整为：
 
-实现一个轻量 GraphRAG-style baseline。它不追求完整复现微软 GraphRAG 的全部工程流程，而是实现图增强检索的核心思想：从文本中抽取实体和关系，构建图结构，在检索时利用实体邻居扩展多跳证据。
+```text
+Phase 2.5: Fair baseline + metrics upgrade
+  -> Phase 3: GraphRAG-style baseline
+  -> Phase 4: Evidence-aware Improved LightRAG
+  -> Phase 4.5: LightRAG controlled integration, optional
+  -> Phase 5: Ablation experiments
+  -> Phase 6: Scale-up experiments + case study
+  -> Phase 7: Final report + resume packaging
+```
+
+阶段优先级：
+
+| 阶段 | 方法 / 工作 | 目标 | 优先级 |
+| --- | --- | --- | --- |
+| Phase 2.5 | Fair baseline + metrics upgrade | 统一 Vector / BM25 / Hybrid 配置，补齐更严格检索指标 | 最高 |
+| Phase 3 | GraphRAG-style baseline | 实现轻量实体关系图检索，进入项目主题 | 最高 |
+| Phase 4 | Evidence-aware Improved LightRAG | 实现图邻居扩展和证据覆盖感知重排序 | 最高 |
+| Phase 4.5 | LightRAG controlled integration | 将外部 LightRAG 纳入统一评估，作为可选对照组 | 中等 |
+| Phase 5 | Ablation experiments | 验证每个改进模块是否真的有效 | 最高 |
+| Phase 6 | Scale-up + case study | 扩大样本规模，并分析成功和失败案例 | 中等 |
+| Phase 7 | Reporting | 整理报告、README、简历材料和结果表格 | 最高 |
+
+## 4. Phase 2.5: Fair Baseline + Metrics Upgrade
+
+### 4.1 目标
+
+把当前 Vector RAG、BM25 和 Hybrid RAG 变成严格公平、可引用的实验基线。
+
+必须统一：
+
+- 同一数据集和 split。
+- 同一 `sample_size` 和 `seed`。
+- 同一 chunking strategy、chunk size 和 overlap。
+- 同一 top-k 设置。
+- 同一 embedding model。
+- 同一评估指标。
+- 同一结果输出格式。
+
+这一阶段完成后，后续 GraphRAG / LightRAG 的提升才不会被质疑来自配置差异。
+
+### 4.2 需要新增或修改的文件
+
+| 文件 | 作用 |
+| --- | --- |
+| `src/evaluation/retrieval_metrics.py` | 补充 Precision@k、NDCG@k、Evidence Hit Count@k、Full Evidence Recall@k |
+| `configs/phase2_vector_rag_fair.yaml` | Vector RAG fair baseline 配置 |
+| `configs/phase2_bm25_rag_fair.yaml` | BM25 fair baseline 配置 |
+| `configs/phase2_hybrid_rag_fair.yaml` | Hybrid RAG fair baseline 配置 |
+| `experiments/run_fair_baselines.ps1` | 一次性运行三种 fair baseline |
+| `tests/test_retrieval_metrics.py` | 扩展指标测试 |
+| `docs/phase2_5_fair_baselines.md` | 记录公平 baseline 设置与结果 |
+
+### 4.3 推荐 fair baseline 配置
+
+主实验建议先用：
+
+```text
+Dataset: HotpotQA validation
+Sample size: 100 for development, 500 for main experiment
+Seed: 42
+Chunk size: 64
+Overlap: 8
+Embedding: sentence-transformers/all-MiniLM-L6-v2
+Top-k: 1, 3, 5, 10
+```
+
+`k=10` 需要加入，因为图扩展和 reranking 往往需要看更宽的候选范围。
+
+### 4.4 指标升级
+
+当前已有：
+
+- Recall@k
+- MRR@k
+- Hit Rate@k
+
+需要新增：
+
+| 指标 | 含义 | 为什么需要 |
+| --- | --- | --- |
+| Precision@k | top-k 中相关证据比例 | 衡量噪声，防止图扩展只提高召回但引入大量无关内容 |
+| NDCG@k | 相关证据是否整体排得靠前 | 比 MRR 更能反映多个 evidence 的排序质量 |
+| Evidence Hit Count@k | top-k 中命中的 gold evidence 数量 | 直观看到找回了几个 supporting docs |
+| Full Evidence Recall@k / Complete Evidence Hit@k | 一个问题所需全部 supporting evidence 是否都出现在 top-k 中 | 多跳问答最关键，衡量证据链是否完整 |
+| Retrieved Context Tokens | 返回上下文长度 | 估算后续 generation token 成本 |
+
+### 4.5 阶段产出
+
+- 100 samples fair baseline 表格。
+- 500 samples fair baseline 表格。
+- 更完整的 retrieval metrics。
+- 一份可在报告和简历中引用的 baseline 结论。
+
+### 4.6 已完成内容与 100 samples fair baseline 结果
+
+Phase 2.5 基础版已经完成：
+
+- 已新增 `precision@k`、`ndcg@k`、`evidence_hit_count@k`、`full_evidence_recall@k`、`retrieved_context_tokens@k`。
+- 已新增 `phase2_vector_rag_fair.yaml`、`phase2_bm25_rag_fair.yaml`、`phase2_hybrid_rag_fair.yaml`。
+- 已新增 `experiments/run_fair_baselines.ps1`。
+- 已在 100 条 HotpotQA validation 样本上完成统一配置实验。
+
+统一设置：
+
+```text
+Dataset: HotpotQA validation
+Sample size: 100
+Seed: 42
+Chunk size: 64
+Overlap: 8
+Embedding: sentence-transformers/all-MiniLM-L6-v2
+Top-k: 10
+Metric k values: 1, 3, 5, 10
+```
+
+主结果：
+
+| Method | Recall@5 | Precision@5 | NDCG@5 | MRR@5 | Full Evidence Recall@5 | Hit Rate@5 | Avg Latency |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Vector RAG | 0.725 | 0.290 | 0.6901 | 0.8325 | 0.510 | 0.940 | 0.0108s |
+| BM25 | 0.710 | 0.284 | 0.6668 | 0.8200 | 0.430 | 0.990 | 0.0053s |
+| Hybrid RAG | 0.790 | 0.316 | 0.7582 | 0.8995 | 0.590 | 0.990 | 0.0213s |
+
+结论：Hybrid RAG 在统一配置下是当前最强 baseline。后续 GraphRAG-style 和 Improved LightRAG 应重点比较 `Full Evidence Recall@5`、`NDCG@5`、`Precision@5` 和检索延迟，而不是只看 Recall@5。
+
+## 5. Phase 3: GraphRAG-style Baseline
+
+### 5.1 目标
+
+实现一个轻量、可解释、可控的 GraphRAG-style baseline。它不追求完整复现微软 GraphRAG，而是实现图增强检索的核心思想：利用实体关系帮助多跳证据发现。
 
 基本流程：
 
 ```text
 contexts / chunks
   -> entity extraction
-  -> relation extraction
-  -> graph construction
+  -> entity-chunk graph construction
   -> query entity linking
-  -> vector retrieval + graph neighbor expansion
+  -> seed retrieval
+  -> graph neighbor expansion
+  -> score fusion
   -> top-k evidence
 ```
 
-### 6.2 计划实现文件
+### 5.2 设计原则
+
+第一版 GraphRAG-style baseline 应该保持轻量：
+
+- 实体抽取优先用 regex、simple noun phrase heuristic 或 spaCy，避免过早依赖 LLM。
+- 图结构先做 entity-chunk graph 和 entity co-occurrence graph。
+- 查询时可以从 query entities 或 seed chunks 出发扩展邻居。
+- 最终排序可以融合 seed retriever score 和 graph proximity score。
+
+### 5.3 计划文件
 
 | 文件 | 作用 |
 | --- | --- |
-| `src/graph/entity_extractor.py` | 从 chunk 中抽取实体 |
-| `src/graph/relation_extractor.py` | 抽取轻量关系或共现关系 |
-| `src/graph/graph_builder.py` | 构建 entity-document-chunk 图 |
-| `src/indexing/graph_index.py` | 存储图结构和实体到 chunk 的映射 |
+| `src/graph/entity_extractor.py` | 从 chunk 和 query 中抽取实体 |
+| `src/graph/graph_builder.py` | 构建 entity-chunk 和 entity-entity 共现图 |
+| `src/indexing/graph_index.py` | 存储实体、chunk、邻接关系和实体到 chunk 的映射 |
 | `src/retrieval/graph_rag_style.py` | 实现 graph-aware retrieval |
-| `configs/phase3_graph_rag.yaml` | GraphRAG-style 配置 |
-| `experiments/run_phase3_graph_rag.ps1` | 运行脚本 |
-| `tests/test_graph_index.py` | 图构建测试 |
+| `configs/phase3_graph_rag_style.yaml` | GraphRAG-style 配置 |
+| `experiments/run_phase3_graph_rag_style.ps1` | 运行脚本 |
+| `tests/test_entity_extractor.py` | 实体抽取测试 |
+| `tests/test_graph_index.py` | 图索引测试 |
 | `tests/test_graph_retrieval.py` | 图检索测试 |
+| `docs/phase3_graph_rag_style.md` | 方法说明和实验结果 |
 
-## 7. Phase 4: LightRAG controlled integration
+### 5.4 初版 scoring 方案
 
-目标是将 LightRAG 纳入统一评估框架，而不是只运行 LightRAG demo。LightRAG 必须使用同一 HotpotQA subset、同一 query set、同一 top-k 和同一评估指标，这样才能和 Vector RAG、BM25、Hybrid RAG、GraphRAG-style RAG 公平比较。
+可以从简单加权开始：
 
-计划实现：
+```text
+final_score = seed_score + graph_weight * graph_proximity_score
+```
+
+其中：
+
+- `seed_score` 来自 Vector / BM25 / Hybrid。
+- `graph_proximity_score` 来自 query entity、seed chunk 与候选 chunk 在图上的距离或实体重合度。
+- `graph_weight` 作为配置项调节。
+
+### 5.5 阶段产出
+
+- GraphRAG-style baseline 实现。
+- GraphRAG-style vs Hybrid RAG 对比表。
+- 图构建时间、图节点数、图边数、检索延迟。
+- 初步 case study：图扩展找到了哪些 Hybrid 漏掉的证据。
+
+## 6. Phase 4: Evidence-aware Improved LightRAG
+
+### 6.1 目标
+
+在 GraphRAG-style baseline 基础上实现项目的核心改进方法：Evidence-aware Improved LightRAG。
+
+这个阶段的重点不是简单接入官方 LightRAG demo，而是提出一个面向多跳证据完整召回的改进版图检索流程。
+
+推荐主流程：
+
+```text
+query
+  -> Hybrid seed retrieval
+  -> query entity linking
+  -> graph neighbor expansion
+  -> collect candidate chunks
+  -> evidence-aware scoring
+  -> coverage-aware reranking
+  -> final top-k evidence
+```
+
+### 6.2 改进一：Evidence-aware Graph Expansion
+
+目标：让图扩展优先补全多跳证据链，而不是机械扩展所有邻居。
+
+可调参数：
+
+- `expansion_depth`: 1 or 2。
+- `max_neighbors_per_entity`。
+- `entity_overlap_weight`。
+- `graph_distance_weight`。
+- `seed_retriever`: Vector / BM25 / Hybrid。
+
+可解释 scoring：
+
+```text
+graph_expansion_score =
+  seed_relevance
+  + entity_overlap_score
+  - graph_distance_penalty
+```
+
+### 6.3 改进二：Coverage-aware Reranking
+
+多跳问答需要 top-k 整体覆盖多个 supporting docs，而不是返回多个相似 chunk。Coverage-aware reranking 用来鼓励结果覆盖不同文档、实体或证据来源。
+
+推荐 scoring：
+
+```text
+final_score =
+  relevance_score
+  + graph_proximity_score
+  + entity_overlap_score
+  + coverage_diversity_score
+```
+
+其中：
+
+- `relevance_score` 衡量 chunk 与 query 的语义或关键词相关性。
+- `graph_proximity_score` 衡量候选 chunk 与 query entities / seed chunks 的图距离。
+- `entity_overlap_score` 衡量候选 chunk 与 query / seed evidence 的实体重合。
+- `coverage_diversity_score` 鼓励 top-k 覆盖不同文档或不同实体簇。
+
+### 6.4 计划文件
+
+| 文件 | 作用 |
+| --- | --- |
+| `src/retrieval/improved_lightrag.py` | Improved LightRAG 主检索器 |
+| `src/retrieval/coverage_reranker.py` | 覆盖感知重排序模块 |
+| `configs/phase4_improved_lightrag.yaml` | 改进方法配置 |
+| `experiments/run_phase4_improved_lightrag.ps1` | 运行脚本 |
+| `tests/test_coverage_reranker.py` | 覆盖重排序测试 |
+| `tests/test_improved_lightrag.py` | Improved LightRAG 检索测试 |
+| `docs/phase4_improved_lightrag.md` | 方法说明、结果和案例 |
+
+### 6.5 阶段产出
+
+- Evidence-aware Improved LightRAG 实现。
+- Improved LightRAG vs GraphRAG-style vs Hybrid RAG 主结果表。
+- Full Evidence Recall@k 和 Precision@k 的重点分析。
+- 图扩展带来的延迟和噪声分析。
+
+## 7. Phase 4.5: LightRAG Controlled Integration, Optional
+
+### 7.1 定位
+
+LightRAG controlled integration 保留为可选对照组，而不是当前主线。
+
+原因：直接接入官方 LightRAG demo 的研究故事不如自己的 GraphRAG-style + Evidence-aware Improved LightRAG 清楚。但如果时间允许，LightRAG 可以作为外部方法对照。
+
+### 7.2 要求
+
+如果接入 LightRAG，必须满足：
+
+- 使用同一 HotpotQA subset。
+- 使用同一 query set。
+- 使用同一 top-k。
+- 使用同一 retrieval metrics。
+- 将 LightRAG 输出转换成统一 retrieval result schema。
+
+计划文件：
 
 | 文件 | 作用 |
 | --- | --- |
 | `src/retrieval/lightrag_runner.py` | LightRAG 输入适配、索引构建、查询和结果捕获 |
-| `configs/phase4_lightrag.yaml` | LightRAG 实验配置 |
-| `experiments/run_phase4_lightrag.ps1` | 运行脚本 |
+| `configs/phase4_5_lightrag.yaml` | LightRAG 实验配置 |
+| `experiments/run_phase4_5_lightrag.ps1` | 运行脚本 |
 | `tests/test_lightrag_adapter.py` | 数据适配测试 |
 
-## 8. Phase 5: Improved LightRAG / improved graph retrieval
+## 8. Phase 5: Ablation Experiments
 
-在 LightRAG 或 GraphRAG-style 检索结果上加入轻量增强策略，观察是否能进一步提升检索质量或回答质量。
+### 8.1 目标
 
-优先方向：
+通过消融实验验证改进模块确实有效，而不是偶然调参结果。
 
-- reranker-based context selection。
-- query rewrite enhanced retrieval。
-- HyDE-style hypothetical document retrieval。
+### 8.2 主消融设置
 
-## 9. Phase 6: 消融实验与报告
+```text
+Hybrid RAG
+GraphRAG-style
+Improved LightRAG
+Improved LightRAG w/o graph expansion
+Improved LightRAG w/o coverage reranking
+Improved LightRAG depth=1
+Improved LightRAG depth=2
+```
 
-系统分析不同组件对结果的影响，并把实验结果整理成表格、图和技术报告。
+### 8.3 辅助消融设置
 
-消融维度包括：
+```text
+top_k = 3 / 5 / 10
+chunk_size = 64 / 128 / 256
+bm25_weight / dense_weight = 0.3/0.7, 0.5/0.5, 0.7/0.3
+max_neighbors_per_entity = 3 / 5 / 10
+```
 
-| 维度 | 候选值 |
+### 8.4 重点分析
+
+- Recall@5 是否提升。
+- Full Evidence Recall@5 是否提升。
+- Precision@5 是否下降。
+- NDCG@5 是否提升。
+- 检索延迟增加多少。
+- 图扩展是否引入噪声。
+
+### 8.5 阶段产出
+
+- `results/ablation_table.csv`
+- `docs/ablation_analysis.md`
+- 方法模块贡献分析。
+- 效果与成本 trade-off 分析。
+
+## 9. Phase 6: Scale-up Experiments + Case Study
+
+### 9.1 目标
+
+让实验具备报告和面试说服力。
+
+推荐规模：
+
+```text
+开发调试：100 samples
+主实验：500 samples
+可选扩展：1000 samples
+```
+
+### 9.2 Case Study 类型
+
+需要从 per-query CSV 中筛选成功和失败案例，解释不同方法的行为差异。
+
+建议至少分析：
+
+- Hybrid RAG 找不到第二跳证据，但 GraphRAG-style 或 Improved LightRAG 找到了。
+- Graph expansion 提高 Recall，但降低 Precision。
+- Coverage-aware reranking 帮助 top-k 覆盖不同 supporting docs。
+- 图噪声导致错误扩展。
+
+### 9.3 阶段产出
+
+- `docs/case_studies.md`
+- 成功案例表。
+- 失败案例表。
+- 针对不同问题类型的效果分析。
+
+## 10. Phase 7: Final Report + Resume Packaging
+
+### 10.1 目标
+
+把项目整理成可展示、可复现、可讲述的科研项目。
+
+### 10.2 计划文件
+
+| 文件 | 作用 |
 | --- | --- |
-| Chunk size | 64, 128, 256, 512 |
-| Top-k | 3, 5, 10, 20 |
-| Embedding model | all-MiniLM-L6-v2, bge-small, bge-base, bge-m3 |
-| Retriever | BM25, dense, hybrid, graph-aware |
-| Reranker | none, cross-encoder, bge-reranker |
-| Query enhancement | none, query rewrite, HyDE |
+| `docs/final_report.md` | 最终技术报告 |
+| `docs/experiment_analysis.md` | 实验分析与图表说明 |
+| `docs/resume_notes.md` | 简历与面试表述 |
+| `results/main_comparison_table.csv` | 主结果表 |
+| `results/ablation_table.csv` | 消融结果表 |
 
-最终报告计划包括：
+### 10.3 最终报告结构
 
-1. 项目背景和研究问题。
-2. 数据集和实验设置。
-3. 方法说明：Vector、BM25、Hybrid、GraphRAG-style、LightRAG、Improved LightRAG。
-4. 检索指标对比。
-5. 回答质量对比。
-6. 延迟和成本分析。
-7. 消融实验。
-8. 成功案例和失败案例。
-9. 结论：图增强 RAG 是否值得使用。
+1. 研究背景：RAG 与多跳问答。
+2. 研究问题：图增强检索是否提升 supporting facts 完整召回。
+3. 数据集：HotpotQA validation subset，后续可扩展 2WikiMultiHopQA。
+4. 方法：Vector RAG、BM25、Hybrid RAG、GraphRAG-style、Evidence-aware Improved LightRAG。
+5. 改进方法：Evidence-aware Graph Expansion 和 Coverage-aware Reranking。
+6. 实验设置：统一 chunking、top-k、embedding、sample size。
+7. 主实验结果。
+8. 消融实验。
+9. 效率和成本分析。
+10. 成功案例与失败案例。
+11. 结论与局限性。
 
-## 10. 当前优先级
+## 11. 推荐实验矩阵
 
-下一步建议：
+### 11.1 主方法对比
 
-1. Phase 3 GraphRAG-style RAG：实现轻量实体关系图，直接对应项目主题。
-2. Phase 4 LightRAG：把外部 LightRAG 纳入统一评估。
-3. Phase 5 Reranker / query rewrite：做轻量改进。
-4. Phase 6 Reporting：整理结果图表和最终报告。
+| 方法 | 使用图 | 使用 Hybrid seed | 使用 coverage reranking | 目的 |
+| --- | --- | --- | --- | --- |
+| Vector RAG | 否 | 否 | 否 | dense retrieval baseline |
+| BM25 | 否 | 否 | 否 | lexical retrieval baseline |
+| Hybrid RAG | 否 | 是 | 否 | 强检索 baseline |
+| GraphRAG-style | 是 | 可选 | 否 | 图增强 baseline |
+| Improved LightRAG | 是 | 是 | 是 | 核心改进方法 |
+| LightRAG | 是 | 视实现而定 | 视实现而定 | 可选外部对照组 |
+
+### 11.2 主评估指标
+
+| 指标 | 用途 |
+| --- | --- |
+| Recall@k | 衡量 gold evidence 覆盖率 |
+| Precision@k | 衡量检索结果噪声 |
+| MRR@k | 衡量第一个相关证据是否靠前 |
+| NDCG@k | 衡量整体排序质量 |
+| Hit Rate@k | 衡量是否至少命中一个 gold evidence |
+| Evidence Hit Count@k | 衡量命中的 gold evidence 数量 |
+| Full Evidence Recall@k / Complete Evidence Hit@k | 衡量是否找全多跳证据链 |
+| Retrieval Latency | 衡量查询阶段成本 |
+| Index / Graph Construction Time | 衡量构建成本 |
+| Retrieved Context Tokens | 衡量后续 generation 成本 |
+
+### 11.3 推荐 k 值
+
+主实验：
+
+```text
+k = 1, 3, 5, 10
+```
+
+报告重点：
+
+```text
+Recall@5
+Full Evidence Recall@5
+NDCG@5
+Precision@5
+Retrieval Latency
+```
+
+## 12. 当前下一步执行清单
+
+Phase 2.5 基础版已经完成。下一步进入 Phase 3: GraphRAG-style baseline。
+
+建议按下面顺序实现：
+
+1. 新增 `src/graph/entity_extractor.py`，先用轻量规则或 noun phrase heuristic 抽取实体。
+2. 新增 `src/graph/graph_builder.py`，构建 entity-chunk 和 entity-entity 共现图。
+3. 新增 `src/indexing/graph_index.py`，存储实体、chunk、邻接关系和实体到 chunk 的映射。
+4. 新增 `src/retrieval/graph_rag_style.py`，实现 seed retrieval + graph neighbor expansion。
+5. 新增 `configs/phase3_graph_rag_style.yaml` 和运行脚本。
+6. 补充 `tests/test_entity_extractor.py`、`tests/test_graph_index.py`、`tests/test_graph_retrieval.py`。
+7. 在 100 条 HotpotQA fair baseline 设置下比较 GraphRAG-style 和 Hybrid RAG。
+8. 如果 GraphRAG-style 有提升，再扩展到 500 条样本并做 case study。
+
+## 13. 简历叙事方向
+
+当前阶段可以写：
+
+> 构建面向 HotpotQA 多跳问答任务的可复现 RAG 对比实验框架，统一实现数据加载、文本切块、Vector RAG、BM25、Hybrid RAG、Recall@k / MRR / Hit Rate 指标评估与结果追踪，为 GraphRAG / LightRAG 的公平对比提供 baseline。
+
+完成后续主线后，可以升级为：
+
+> 构建面向 HotpotQA 多跳问答的可复现 RAG 对比实验框架，统一实现 Vector RAG、BM25、Hybrid RAG 与 GraphRAG-style 检索方法，并提出 Evidence-aware Improved LightRAG，通过图邻居扩展与证据覆盖感知重排序提升 supporting facts 完整召回。设计 Recall@k、Precision@k、MRR、NDCG、Full Evidence Recall、检索延迟等指标，在统一配置下完成多方法对比与消融实验，分析图增强检索在多跳问答中的效果与成本权衡。
+
