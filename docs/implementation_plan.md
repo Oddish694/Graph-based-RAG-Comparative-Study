@@ -96,8 +96,8 @@ Phase 2.5: Fair baseline + metrics upgrade
 | 阶段 | 方法 / 工作 | 目标 | 优先级 |
 | --- | --- | --- | --- |
 | Phase 2.5 | Fair baseline + metrics upgrade | 统一 Vector / BM25 / Hybrid 配置，补齐更严格检索指标 | 最高 |
-| Phase 3 | GraphRAG-style baseline | 实现轻量实体关系图检索，进入项目主题 | 最高 |
-| Phase 4 | Evidence-aware Improved LightRAG | 实现图邻居扩展和证据覆盖感知重排序 | 最高 |
+| Phase 3 | GraphRAG-style baseline | 实现轻量实体关系图检索，进入项目主题 | 已完成基础版 |
+| Phase 4 | Evidence-aware Improved LightRAG | 实现图邻居扩展和证据覆盖感知重排序 | 下一步 |
 | Phase 4.5 | LightRAG controlled integration | 将外部 LightRAG 纳入统一评估，作为可选对照组 | 中等 |
 | Phase 5 | Ablation experiments | 验证每个改进模块是否真的有效 | 最高 |
 | Phase 6 | Scale-up + case study | 扩大样本规模，并分析成功和失败案例 | 中等 |
@@ -269,6 +269,35 @@ final_score = seed_score + graph_weight * graph_proximity_score
 - GraphRAG-style vs Hybrid RAG 对比表。
 - 图构建时间、图节点数、图边数、检索延迟。
 - 初步 case study：图扩展找到了哪些 Hybrid 漏掉的证据。
+
+### 5.6 已完成内容与 100 samples 结果
+
+Phase 3 基础版已经完成：
+
+- 已实现 `SimpleEntityExtractor`，用轻量规则抽取大写专有名词和多词实体。
+- 已实现 `GraphIndex`，存储 entity-to-chunk、chunk-to-entity 和 entity co-occurrence graph。
+- 已实现 `GraphRAGStyleRetriever`，使用 Hybrid seed retrieval + graph neighbor expansion + score fusion。
+- 已新增 `configs/phase3_graph_rag_style.yaml` 和 `experiments/run_phase3_graph_rag_style.ps1`。
+- 已新增实体抽取、图索引、图检索和 Phase 3 runner 测试。
+- 已在 100 条 HotpotQA validation fair baseline 设置下完成实验。
+
+与 Hybrid RAG fair baseline 对比：
+
+| Method | Recall@5 | Precision@5 | NDCG@5 | MRR@5 | Full Evidence Recall@5 | Hit Rate@5 | Avg Latency |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Hybrid RAG | 0.790 | 0.316 | 0.7582 | 0.8995 | 0.590 | 0.990 | 0.0213s |
+| GraphRAG-style | 0.805 | 0.322 | 0.7718 | 0.9095 | 0.620 | 0.990 | 0.0410s |
+
+图统计：
+
+| Metric | Value |
+| --- | ---: |
+| Graph entities | 8238 |
+| Graph edges | 66592 |
+| Index / graph construction time | 22.94s |
+| Avg retrieval latency | 0.0410s |
+
+结论：轻量 GraphRAG-style 在 top-5 证据召回、完整证据链召回和排序质量上小幅超过 Hybrid RAG，但延迟和构建成本更高。这说明图扩展有价值，也说明后续 Phase 4 需要做 Evidence-aware Graph Expansion 和 Coverage-aware Reranking 来进一步控制噪声和成本。
 
 ## 6. Phase 4: Evidence-aware Improved LightRAG
 
@@ -532,18 +561,18 @@ Retrieval Latency
 
 ## 12. 当前下一步执行清单
 
-Phase 2.5 基础版已经完成。下一步进入 Phase 3: GraphRAG-style baseline。
+Phase 3 GraphRAG-style baseline 基础版已经完成。下一步进入 Phase 4: Evidence-aware Improved LightRAG。
 
 建议按下面顺序实现：
 
-1. 新增 `src/graph/entity_extractor.py`，先用轻量规则或 noun phrase heuristic 抽取实体。
-2. 新增 `src/graph/graph_builder.py`，构建 entity-chunk 和 entity-entity 共现图。
-3. 新增 `src/indexing/graph_index.py`，存储实体、chunk、邻接关系和实体到 chunk 的映射。
-4. 新增 `src/retrieval/graph_rag_style.py`，实现 seed retrieval + graph neighbor expansion。
-5. 新增 `configs/phase3_graph_rag_style.yaml` 和运行脚本。
-6. 补充 `tests/test_entity_extractor.py`、`tests/test_graph_index.py`、`tests/test_graph_retrieval.py`。
-7. 在 100 条 HotpotQA fair baseline 设置下比较 GraphRAG-style 和 Hybrid RAG。
-8. 如果 GraphRAG-style 有提升，再扩展到 500 条样本并做 case study。
+1. 新增 `src/retrieval/coverage_reranker.py`，实现覆盖感知重排序，鼓励 top-k 覆盖不同文档和实体簇。
+2. 新增 `src/retrieval/improved_lightrag.py`，封装 Hybrid seed retrieval + graph expansion + coverage reranking。
+3. 支持配置 `expansion_depth`、`max_neighbors_per_entity`、`entity_overlap_weight`、`graph_distance_weight`、`coverage_weight`。
+4. 新增 `configs/phase4_improved_lightrag.yaml` 和运行脚本。
+5. 补充 `tests/test_coverage_reranker.py`、`tests/test_improved_lightrag.py`。
+6. 在 100 条 HotpotQA fair baseline 设置下比较 Improved LightRAG、GraphRAG-style 和 Hybrid RAG。
+7. 做消融：w/o graph expansion、w/o coverage reranking、depth=1 vs depth=2。
+8. 如果 Phase 4 有提升，再扩展到 500 条样本并做 case study。
 
 ## 13. 简历叙事方向
 
@@ -554,4 +583,5 @@ Phase 2.5 基础版已经完成。下一步进入 Phase 3: GraphRAG-style baseli
 完成后续主线后，可以升级为：
 
 > 构建面向 HotpotQA 多跳问答的可复现 RAG 对比实验框架，统一实现 Vector RAG、BM25、Hybrid RAG 与 GraphRAG-style 检索方法，并提出 Evidence-aware Improved LightRAG，通过图邻居扩展与证据覆盖感知重排序提升 supporting facts 完整召回。设计 Recall@k、Precision@k、MRR、NDCG、Full Evidence Recall、检索延迟等指标，在统一配置下完成多方法对比与消融实验，分析图增强检索在多跳问答中的效果与成本权衡。
+
 

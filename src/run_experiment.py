@@ -12,6 +12,7 @@ from src.datasets.hotpotqa_loader import load_cached_jsonl, load_hotpotqa_small
 from src.evaluation.retrieval_metrics import evaluate_query, mean_metrics
 from src.indexing.vector_index import HashingEmbeddingModel, SentenceTransformerEmbeddingModel
 from src.retrieval.bm25_rag import BM25RAGRetriever
+from src.retrieval.graph_rag_style import GraphRAGStyleRetriever
 from src.retrieval.hybrid_rag import HybridRAGRetriever
 from src.retrieval.vector_rag import VectorRAGRetriever
 
@@ -45,7 +46,7 @@ def run_retrieval_experiment(
     retrieval_config = config.get("retrieval", {})
     method = str(retrieval_config.get("method", default_method)).lower()
     embedding_model = None
-    if method in {"vector", "dense", "hybrid"}:
+    if method in {"vector", "dense", "hybrid", "graph_rag_style", "graph"}:
         embedding_model = build_embedding_model(config.get("embedding", {}))
 
     index_start = time.perf_counter()
@@ -61,7 +62,7 @@ def run_retrieval_experiment(
     per_query_rows: list[dict[str, Any]] = []
     for sample in samples:
         query_start = time.perf_counter()
-        if method == "hybrid":
+        if method in {"hybrid", "graph_rag_style", "graph"}:
             retrieved = retriever.retrieve(sample.question, top_k=top_k, candidate_k=candidate_k)
         else:
             retrieved = retriever.retrieve(sample.question, top_k=top_k)
@@ -87,6 +88,9 @@ def run_retrieval_experiment(
     aggregate["index_time_seconds"] = index_time_seconds
     aggregate["num_samples"] = float(len(samples))
     aggregate["num_chunks"] = float(len(chunks))
+    if hasattr(retriever, "graph_index"):
+        aggregate["graph_num_entities"] = float(retriever.graph_index.num_entities)
+        aggregate["graph_num_edges"] = float(retriever.graph_index.num_edges)
     aggregate["avg_retrieval_latency_seconds"] = (
         sum(row["retrieval_latency_seconds"] for row in per_query_rows) / len(per_query_rows)
         if per_query_rows
@@ -128,6 +132,20 @@ def build_retriever(
         return HybridRAGRetriever.from_chunks(
             chunks,
             embedding_model=embedding_model,
+            bm25_weight=float(retrieval_config.get("bm25_weight", 0.5)),
+            dense_weight=float(retrieval_config.get("dense_weight", 0.5)),
+            fusion=str(retrieval_config.get("fusion", "weighted")).lower(),
+            rrf_k=int(retrieval_config.get("rrf_k", 60)),
+        )
+    if method in {"graph_rag_style", "graph"}:
+        return GraphRAGStyleRetriever.from_chunks(
+            chunks,
+            embedding_model=embedding_model,
+            seed_top_k=int(retrieval_config.get("seed_top_k", 10)),
+            expansion_depth=int(retrieval_config.get("expansion_depth", 1)),
+            max_neighbors_per_entity=int(retrieval_config.get("max_neighbors_per_entity", 10)),
+            seed_weight=float(retrieval_config.get("seed_weight", 0.7)),
+            graph_weight=float(retrieval_config.get("graph_weight", 0.3)),
             bm25_weight=float(retrieval_config.get("bm25_weight", 0.5)),
             dense_weight=float(retrieval_config.get("dense_weight", 0.5)),
             fusion=str(retrieval_config.get("fusion", "weighted")).lower(),
@@ -186,3 +204,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
