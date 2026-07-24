@@ -23,8 +23,13 @@ retrieval:
   seed_top_k: 10
   expansion_depth: 1
   max_neighbors_per_entity: 10
+  max_seed_entities: 25
   seed_weight: 0.7
   graph_weight: 0.3
+  query_entity_weight: 0.45
+  seed_entity_weight: 0.25
+  expansion_weight: 0.30
+  distance_decay: 0.5
   bm25_weight: 0.5
   dense_weight: 0.5
   fusion: weighted

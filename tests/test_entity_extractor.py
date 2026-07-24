@@ -22,6 +22,16 @@ class EntityExtractorTest(unittest.TestCase):
     def test_normalize_entity_collapses_whitespace_and_case(self):
         self.assertEqual(normalize_entity("  Ada   Lovelace  "), "ada lovelace")
 
+    def test_extracts_acronyms_titles_and_aliases(self):
+        extractor = SimpleEntityExtractor()
+        entities = extractor.extract("The U.S. released 'Apollo Guidance Computer' documents about New York City.")
+
+        self.assertIn("us", entities)
+        self.assertIn("apollo guidance computer", entities)
+        self.assertIn("agc", entities)
+        self.assertIn("new york city", entities)
+        self.assertIn("nyc", entities)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -275,8 +275,10 @@ final_score = seed_score + graph_weight * graph_proximity_score
 Phase 3 可复现实验版本已经完成：
 
 - 已实现 `SimpleEntityExtractor`，用轻量规则抽取大写专有名词和多词实体。
+- 已增强实体抽取，支持带连接词的专有名词、缩写、标题短语和谨慎别名。
 - 已实现 `GraphIndex`，存储 entity-to-chunk、chunk-to-entity 和 entity co-occurrence graph。
-- 已实现 `GraphRAGStyleRetriever`，使用 Hybrid seed retrieval + graph neighbor expansion + score fusion。
+- 已实现 `GraphRAGStyleRetriever`，使用 Hybrid seed retrieval + graph neighbor expansion + 加权图评分。
+- 已将 graph score 拆成 `query_entity_score`、`seed_entity_score` 和 `graph_proximity_score`，并加入实体频率权重、图距离衰减和 `max_seed_entities` 扩展上限。
 - 已新增 `configs/phase3_graph_rag_style.yaml` 和 `experiments/run_phase3_graph_rag_style.ps1`。
 - 已新增实体抽取、图索引、图检索和 Phase 3 runner 测试。
 - 已在 100 条 HotpotQA validation fair baseline 设置下完成实验。
@@ -286,18 +288,18 @@ Phase 3 可复现实验版本已经完成：
 | Method | Recall@5 | Precision@5 | NDCG@5 | MRR@5 | Full Evidence Recall@5 | Hit Rate@5 | Avg Latency |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Hybrid RAG | 0.790 | 0.316 | 0.7582 | 0.8995 | 0.590 | 0.990 | 0.0213s |
-| GraphRAG-style | 0.805 | 0.322 | 0.7718 | 0.9095 | 0.620 | 0.990 | 0.0410s |
+| GraphRAG-style | 0.805 | 0.322 | 0.7727 | 0.9125 | 0.620 | 0.990 | 0.0866s |
 
 图统计：
 
 | Metric | Value |
 | --- | ---: |
-| Graph entities | 8238 |
-| Graph edges | 66592 |
-| Index / graph construction time | 22.94s |
-| Avg retrieval latency | 0.0410s |
+| Graph entities | 12767 |
+| Graph edges | 194354 |
+| Index / graph construction time | 24.52s |
+| Avg retrieval latency | 0.0866s |
 
-结论：轻量 GraphRAG-style 在 top-5 证据召回、完整证据链召回和排序质量上小幅超过 Hybrid RAG，但延迟和构建成本更高。这说明图扩展有价值，也说明后续 Phase 4 需要做 Evidence-aware Graph Expansion 和 Coverage-aware Reranking 来进一步控制噪声和成本。
+结论：增强后的 GraphRAG-style 在 top-5 证据召回、完整证据链召回和排序质量上超过 Hybrid RAG，并且在 top-10 上进一步提升 Recall 和 Full Evidence Recall。但实体图规模和查询延迟也更高，说明图扩展有价值，也需要通过 coverage-aware reranking、实体扩展上限和后续消融继续控制噪声和成本。
 
 ## 6. Phase 4: Evidence-aware Improved LightRAG
 
@@ -397,18 +399,18 @@ Phase 4 可复现实验版本已经完成：
 | Method | Recall@5 | Precision@5 | NDCG@5 | MRR@5 | Full Evidence Recall@5 | Hit Rate@5 | Avg Latency |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Hybrid RAG | 0.790 | 0.316 | 0.7582 | 0.8995 | 0.590 | 0.990 | 0.0213s |
-| GraphRAG-style | 0.805 | 0.322 | 0.7718 | 0.9095 | 0.620 | 0.990 | 0.0410s |
-| Improved LightRAG | 0.805 | 0.322 | 0.7751 | 0.9095 | 0.620 | 0.990 | 0.0306s |
+| GraphRAG-style | 0.805 | 0.322 | 0.7727 | 0.9125 | 0.620 | 0.990 | 0.0866s |
+| Improved LightRAG | 0.820 | 0.328 | 0.7851 | 0.9158 | 0.650 | 0.990 | 0.0584s |
 
 Top-10 对比：
 
 | Method | Recall@10 | Precision@10 | NDCG@10 | Full Evidence Recall@10 | Hit Rate@10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Hybrid RAG | 0.890 | 0.178 | 0.7988 | 0.780 | 1.000 |
-| GraphRAG-style | 0.885 | 0.177 | 0.8042 | 0.770 | 1.000 |
-| Improved LightRAG | 0.890 | 0.178 | 0.8090 | 0.780 | 1.000 |
+| GraphRAG-style | 0.905 | 0.181 | 0.8129 | 0.810 | 1.000 |
+| Improved LightRAG | 0.910 | 0.182 | 0.8209 | 0.820 | 1.000 |
 
-结论：Phase 4 基础版主要提升排序质量和 top-10 覆盖，`NDCG@5`、`NDCG@10`、`Recall@10` 和 `Full Evidence Recall@10` 相比 GraphRAG-style 有小幅提升。下一步需要进入 Phase 5 做系统消融，验证收益来自 graph expansion 还是 coverage reranking。
+结论：增强图评分后，Phase 4 不只提升排序质量，也提升了 top-5 完整证据链召回。`Recall@5` 达到 0.820，`Full Evidence Recall@5` 达到 0.650，`NDCG@10` 达到 0.8209。下一步需要进入 Phase 5 做系统消融，验证收益分别来自 enhanced graph scoring、graph expansion 和 coverage reranking 的哪些部分。
 
 ## 7. Phase 4.5: LightRAG Controlled Integration
 

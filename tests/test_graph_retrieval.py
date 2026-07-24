@@ -40,6 +40,34 @@ class GraphRetrievalTest(unittest.TestCase):
         self.assertTrue(all(row["retriever_source"] == "graph_rag_style" for row in results))
         self.assertTrue(any(row.get("graph_score", 0.0) > 0.0 for row in results))
 
+    def test_graph_retriever_exposes_explainable_graph_score_components(self):
+        chunks = [
+            {
+                "chunk_id": "seed::0",
+                "doc_id": "Seed",
+                "title": "Seed",
+                "text": "Ada Lovelace studied the Analytical Engine.",
+            },
+            {
+                "chunk_id": "target::0",
+                "doc_id": "Target",
+                "title": "Target",
+                "text": "Charles Babbage designed the Analytical Engine.",
+            },
+        ]
+        retriever = GraphRAGStyleRetriever.from_chunks(
+            chunks,
+            embedding_model=HashingEmbeddingModel(dimensions=32),
+            graph_weight=1.0,
+            seed_weight=0.0,
+        )
+
+        results = retriever.retrieve("Who designed the Analytical Engine?", top_k=2, candidate_k=2)
+
+        self.assertTrue(any(row.get("query_entity_score", 0.0) > 0.0 for row in results))
+        self.assertTrue(any(row.get("graph_proximity_score", 0.0) > 0.0 for row in results))
+        self.assertTrue(all("reachable_entities" in row for row in results))
+
 
 if __name__ == "__main__":
     unittest.main()

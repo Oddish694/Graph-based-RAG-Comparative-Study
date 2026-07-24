@@ -2,6 +2,7 @@
 
 from collections import defaultdict, deque
 from itertools import combinations
+import math
 from typing import Any, Iterable
 
 from src.graph.entity_extractor import normalize_entity
@@ -13,10 +14,12 @@ class GraphIndex:
         self.entity_to_chunk_ids: dict[str, set[str]] = defaultdict(set)
         self.chunk_to_entities: dict[str, set[str]] = defaultdict(set)
         self.entity_adjacency: dict[str, set[str]] = defaultdict(set)
+        self._entity_weight_cache: dict[str, float] = {}
 
     def add_chunk(self, chunk: dict[str, Any], entities: Iterable[str]) -> None:
         chunk_id = str(chunk["chunk_id"])
         normalized_entities = {normalize_entity(entity) for entity in entities if normalize_entity(entity)}
+        self._entity_weight_cache.clear()
         self.chunks_by_id[chunk_id] = dict(chunk)
         self.chunk_to_entities[chunk_id].update(normalized_entities)
         for entity in normalized_entities:
@@ -35,27 +38,53 @@ class GraphIndex:
     def neighbors(self, entity: str) -> set[str]:
         return set(self.entity_adjacency.get(normalize_entity(entity), set()))
 
-    def expand_from_entities(
+    def entity_weight(self, entity: str) -> float:
+        normalized = normalize_entity(entity)
+        if normalized in self._entity_weight_cache:
+            return self._entity_weight_cache[normalized]
+        frequency = len(self.entity_to_chunk_ids.get(normalized, set()))
+        if frequency <= 0:
+            return 0.0
+        weight = 1.0 / math.sqrt(frequency)
+        self._entity_weight_cache[normalized] = weight
+        return weight
+
+    def shortest_entity_distances(
         self,
         entities: Iterable[str],
         depth: int = 1,
         max_neighbors_per_entity: int = 10,
-    ) -> list[dict[str, Any]]:
+    ) -> dict[str, int]:
         start_entities = [normalize_entity(entity) for entity in entities if normalize_entity(entity)]
-        visited: set[str] = set(start_entities)
+        distances: dict[str, int] = {entity: 0 for entity in start_entities}
         queue: deque[tuple[str, int]] = deque((entity, 0) for entity in start_entities)
 
         while queue:
             entity, distance = queue.popleft()
             if distance >= depth:
                 continue
-            neighbors = sorted(self.entity_adjacency.get(entity, set()))[:max_neighbors_per_entity]
+            neighbors = sorted(
+                self.entity_adjacency.get(entity, set()),
+                key=lambda neighbor: (-self.entity_weight(neighbor), neighbor),
+            )[:max_neighbors_per_entity]
             for neighbor in neighbors:
-                if neighbor not in visited:
-                    visited.add(neighbor)
+                if neighbor not in distances:
+                    distances[neighbor] = distance + 1
                     queue.append((neighbor, distance + 1))
+        return distances
 
-        return self.get_chunks_for_entities(visited)
+    def expand_from_entities(
+        self,
+        entities: Iterable[str],
+        depth: int = 1,
+        max_neighbors_per_entity: int = 10,
+    ) -> list[dict[str, Any]]:
+        distances = self.shortest_entity_distances(
+            entities,
+            depth=depth,
+            max_neighbors_per_entity=max_neighbors_per_entity,
+        )
+        return self.get_chunks_for_entities(distances)
 
     def expand_from_chunks(
         self,

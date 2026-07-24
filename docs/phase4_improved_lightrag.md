@@ -32,8 +32,8 @@ Hybrid seed retrieval
 
 Phase 4 的检索流程如下：
 
-1. 使用 GraphRAG-style 生成候选池。这个候选池本身来自 Hybrid seed retrieval 和 graph neighbor expansion。
-2. 每个候选 chunk 保留 `score`、`seed_score`、`graph_score`、`matched_entities` 等字段。
+1. 使用增强后的 GraphRAG-style 生成候选池。这个候选池本身来自 Hybrid seed retrieval、加权实体图评分和 graph neighbor expansion。
+2. 每个候选 chunk 保留 `score`、`seed_score`、`graph_score`、`query_entity_score`、`seed_entity_score`、`graph_proximity_score`、`matched_entities` 等字段。
 3. Coverage-aware reranker 逐个选择 top-k 结果。
 4. 每一步选择时综合考虑：
    - 原始相关性分数。
@@ -116,31 +116,32 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\experiments\run_phase4_imp
 | Method | Recall@5 | Precision@5 | NDCG@5 | MRR@5 | Full Evidence Recall@5 | Hit Rate@5 | Avg Latency |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Hybrid RAG | 0.790 | 0.316 | 0.7582 | 0.8995 | 0.590 | 0.990 | 0.0213s |
-| GraphRAG-style | 0.805 | 0.322 | 0.7718 | 0.9095 | 0.620 | 0.990 | 0.0410s |
-| Improved LightRAG | 0.805 | 0.322 | 0.7751 | 0.9095 | 0.620 | 0.990 | 0.0306s |
+| GraphRAG-style | 0.805 | 0.322 | 0.7727 | 0.9125 | 0.620 | 0.990 | 0.0866s |
+| Improved LightRAG | 0.820 | 0.328 | 0.7851 | 0.9158 | 0.650 | 0.990 | 0.0584s |
 
 Top-10 对比：
 
 | Method | Recall@10 | Precision@10 | NDCG@10 | Full Evidence Recall@10 | Hit Rate@10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Hybrid RAG | 0.890 | 0.178 | 0.7988 | 0.780 | 1.000 |
-| GraphRAG-style | 0.885 | 0.177 | 0.8042 | 0.770 | 1.000 |
-| Improved LightRAG | 0.890 | 0.178 | 0.8090 | 0.780 | 1.000 |
+| GraphRAG-style | 0.905 | 0.181 | 0.8129 | 0.810 | 1.000 |
+| Improved LightRAG | 0.910 | 0.182 | 0.8209 | 0.820 | 1.000 |
 
 ## 8. 结果解释
 
-Phase 4 的基础版没有继续提高 Recall@5 和 Full Evidence Recall@5，但改善了排序质量：
+在增强实体抽取和加权图评分后，Phase 4 相比旧版有更明显提升：
 
-- `NDCG@5`: GraphRAG-style 0.7718 -> Improved LightRAG 0.7751
-- `NDCG@10`: GraphRAG-style 0.8042 -> Improved LightRAG 0.8090
-- `Recall@10`: GraphRAG-style 0.885 -> Improved LightRAG 0.890
-- `Full Evidence Recall@10`: GraphRAG-style 0.770 -> Improved LightRAG 0.780
+- `Recall@5`: GraphRAG-style 0.805 -> Improved LightRAG 0.820
+- `Full Evidence Recall@5`: GraphRAG-style 0.620 -> Improved LightRAG 0.650
+- `NDCG@5`: GraphRAG-style 0.7727 -> Improved LightRAG 0.7851
+- `NDCG@10`: GraphRAG-style 0.8129 -> Improved LightRAG 0.8209
+- `Full Evidence Recall@10`: GraphRAG-style 0.810 -> Improved LightRAG 0.820
 
-这说明 coverage-aware reranking 的第一版主要收益在候选排序和 top-10 完整覆盖上，而不是直接提升 top-5 召回。
+这说明 coverage-aware reranking 在更强的图候选池上不仅改善排序质量，也能把更多完整证据链推进 top-5。
 
 ## 9. 阶段结论
 
-Phase 4 建立了 Improved LightRAG 的基础实现，并验证 coverage-aware reranking 有一定排序收益。
+Phase 4 建立了 Improved LightRAG 的可复现实验版本，并验证 coverage-aware reranking 在增强图评分后能带来 top-5 证据完整召回和排序质量提升。
 
 下一步应该进入 Phase 5：系统消融。
 

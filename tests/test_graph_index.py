@@ -30,6 +30,19 @@ class GraphIndexTest(unittest.TestCase):
 
         self.assertIn("b::0", {row["chunk_id"] for row in expanded})
 
+    def test_graph_index_tracks_entity_weight_and_distances(self):
+        chunks = [
+            {"chunk_id": "a::0", "doc_id": "A", "title": "A", "text": "Rare Entity connects Common Entity."},
+            {"chunk_id": "b::0", "doc_id": "B", "title": "B", "text": "Common Entity connects Bridge Entity."},
+            {"chunk_id": "c::0", "doc_id": "C", "title": "C", "text": "Common Entity connects Target Entity."},
+        ]
+        graph = build_graph_index(chunks, SimpleEntityExtractor())
+
+        self.assertGreater(graph.entity_weight("rare entity"), graph.entity_weight("common entity"))
+        distances = graph.shortest_entity_distances(["rare entity"], depth=2, max_neighbors_per_entity=10)
+        self.assertEqual(distances["rare entity"], 0)
+        self.assertIn("bridge entity", distances)
+
 
 if __name__ == "__main__":
     unittest.main()
