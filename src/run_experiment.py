@@ -15,6 +15,7 @@ from src.retrieval.bm25_rag import BM25RAGRetriever
 from src.retrieval.graph_rag_style import GraphRAGStyleRetriever
 from src.retrieval.hybrid_rag import HybridRAGRetriever
 from src.retrieval.improved_lightrag import ImprovedLightRAGRetriever
+from src.retrieval.lightrag_runner import LightRAGControlledRetriever
 from src.retrieval.vector_rag import VectorRAGRetriever
 
 
@@ -47,7 +48,7 @@ def run_retrieval_experiment(
     retrieval_config = config.get("retrieval", {})
     method = str(retrieval_config.get("method", default_method)).lower()
     embedding_model = None
-    if method in {"vector", "dense", "hybrid", "graph_rag_style", "graph", "improved_lightrag"}:
+    if method in {"vector", "dense", "hybrid", "graph_rag_style", "graph", "improved_lightrag", "lightrag"}:
         embedding_model = build_embedding_model(config.get("embedding", {}))
 
     index_start = time.perf_counter()
@@ -63,7 +64,7 @@ def run_retrieval_experiment(
     per_query_rows: list[dict[str, Any]] = []
     for sample in samples:
         query_start = time.perf_counter()
-        if method in {"hybrid", "graph_rag_style", "graph", "improved_lightrag"}:
+        if method in {"hybrid", "graph_rag_style", "graph", "improved_lightrag", "lightrag"}:
             retrieved = retriever.retrieve(sample.question, top_k=top_k, candidate_k=candidate_k)
         else:
             retrieved = retriever.retrieve(sample.question, top_k=top_k)
@@ -173,6 +174,16 @@ def build_retriever(
             relevance_weight=float(retrieval_config.get("relevance_weight", 1.0)),
             use_graph_expansion=_as_bool(retrieval_config.get("use_graph_expansion", True)),
             use_coverage_reranking=_as_bool(retrieval_config.get("use_coverage_reranking", True)),
+        )
+    if method == "lightrag":
+        return LightRAGControlledRetriever.from_chunks(
+            chunks,
+            embedding_model=embedding_model,
+            backend=str(retrieval_config.get("backend", "local_compat")),
+            bm25_weight=float(retrieval_config.get("bm25_weight", 0.5)),
+            dense_weight=float(retrieval_config.get("dense_weight", 0.5)),
+            fusion=str(retrieval_config.get("fusion", "weighted")).lower(),
+            rrf_k=int(retrieval_config.get("rrf_k", 60)),
         )
     raise ValueError(f"Unsupported retrieval method: {method}")
 

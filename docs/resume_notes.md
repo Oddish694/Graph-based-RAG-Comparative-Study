@@ -8,7 +8,7 @@
 - 实现 Vector RAG、BM25 lexical retrieval 与 Hybrid RAG baseline，支持 sentence-transformers 向量编码、BM25 关键词检索、weighted score fusion 和 reciprocal rank fusion。
 - 设计 fair baseline 实验配置，统一 Vector / BM25 / Hybrid 的数据集、sample size、seed、chunk size、overlap、top-k 和指标设置，避免方法差异被配置差异干扰。
 - 扩展 retrieval metrics，实现 Recall@k、Precision@k、MRR@k、NDCG@k、Hit Rate@k、Evidence Hit Count@k、Full Evidence Recall@k 和 Retrieved Context Tokens，用于评估多跳证据覆盖、排序质量、噪声和上下文成本。
-- 在 100 条 HotpotQA validation 样本上完成公平对比：Hybrid RAG 取得 Recall@5 0.790、Full Evidence Recall@5 0.590、NDCG@5 0.7582，优于 Vector RAG 和 BM25。进一步实现轻量 GraphRAG-style baseline，通过实体图邻居扩展将 Recall@5 提升到 0.805、Full Evidence Recall@5 提升到 0.620；在此基础上实现 Improved LightRAG-style coverage reranking，将 NDCG@10 提升到 0.8090。
+- 在 100 条 HotpotQA validation 样本上完成公平对比：Hybrid RAG 取得 Recall@5 0.790、Full Evidence Recall@5 0.590、NDCG@5 0.7582，优于 Vector RAG 和 BM25。进一步实现轻量 GraphRAG-style retriever，通过实体图邻居扩展将 Recall@5 提升到 0.805、Full Evidence Recall@5 提升到 0.620；在此基础上实现 Improved LightRAG-style coverage reranking，将 NDCG@10 提升到 0.8090，并补充 LightRAG controlled integration layer，为后续外部方法对照提供统一评估接口。
 - 使用 YAML 配置驱动实验流程，输出 per-query CSV 和 aggregate metrics JSON，并通过单元测试覆盖 loader、chunker、BM25 index、hybrid retriever、runner 和 retrieval metrics。
 
 ## English Resume Version
@@ -19,7 +19,7 @@ Graph-based RAG Frameworks: Reproduction, Comparative Study and Ablation Analysi
 - Implemented Vector RAG, BM25 lexical retrieval and Hybrid RAG baselines with Sentence-Transformers embeddings, BM25 scoring, weighted score fusion and reciprocal rank fusion.
 - Designed fair baseline configurations that unify dataset, sample size, seed, chunk size, overlap, top-k and metrics across Vector / BM25 / Hybrid retrieval.
 - Extended retrieval evaluation with Recall@k, Precision@k, MRR@k, NDCG@k, Hit Rate@k, Evidence Hit Count@k, Full Evidence Recall@k and Retrieved Context Tokens to measure multi-hop evidence coverage, ranking quality, noise and context cost.
-- Evaluated on 100 HotpotQA validation samples. Hybrid RAG achieved Recall@5 of 0.790, Full Evidence Recall@5 of 0.590 and NDCG@5 of 0.7582. A lightweight GraphRAG-style baseline further improved Recall@5 to 0.805 and Full Evidence Recall@5 to 0.620 through entity-graph neighbor expansion. Improved LightRAG-style coverage reranking further improved NDCG@10 to 0.8090.
+- Evaluated on 100 HotpotQA validation samples. Hybrid RAG achieved Recall@5 of 0.790, Full Evidence Recall@5 of 0.590 and NDCG@5 of 0.7582. A lightweight GraphRAG-style retriever further improved Recall@5 to 0.805 and Full Evidence Recall@5 to 0.620 through entity-graph neighbor expansion. Improved LightRAG-style coverage reranking further improved NDCG@10 to 0.8090, and a LightRAG controlled integration layer was added for future external method comparison.
 - Designed YAML-driven experiments with per-query CSV and aggregate JSON outputs, backed by unit tests for data loading, chunking, indexing, retrieval and metric computation.
 
 ## 面试讲法：项目整体在做什么
@@ -28,7 +28,7 @@ Graph-based RAG Frameworks: Reproduction, Comparative Study and Ablation Analysi
 
 我选择 HotpotQA 是因为它是多跳问答数据集，每条样本除了 question 和 answer，还提供 supporting facts。这些 supporting facts 可以作为 gold evidence，用来自动评估检索结果是否找到了真正支持答案的文档。
 
-整个项目最终会比较 Vector RAG、BM25、Hybrid RAG、GraphRAG-style RAG、LightRAG 和改进版 LightRAG。当前已经完成 Vector RAG baseline、BM25 + Hybrid RAG baseline、Phase 2.5 的公平基线和指标升级，以及 Phase 3 的轻量 GraphRAG-style baseline。
+整个项目最终会比较 Vector RAG、BM25、Hybrid RAG、GraphRAG-style RAG、LightRAG 和改进版 LightRAG。当前已经完成 Vector RAG baseline、BM25 + Hybrid RAG baseline、Phase 2.5 的公平基线和指标升级、Phase 3 的轻量 GraphRAG-style retriever、Phase 4 的 Improved LightRAG-style retriever，以及 Phase 4.5 的 LightRAG controlled integration layer。
 
 ## 面试讲法：Phase 1 做了什么
 
@@ -72,6 +72,15 @@ Phase 4 我在 GraphRAG-style baseline 上实现了一个 Improved LightRAG-styl
 它的流程是：先用 GraphRAG-style 生成候选池，也就是 Hybrid seed retrieval 加图邻居扩展；然后对候选结果做 coverage-aware reranking。重排序时不仅看原始相关性分数，还会给尚未覆盖的 document 和新的 matched entities 轻微加分，鼓励 top-k 结果覆盖更多不同证据来源。
 
 在 100 条 HotpotQA validation fair baseline 设置下，Improved LightRAG 的 Recall@5 和 Full Evidence Recall@5 与 GraphRAG-style 持平，分别是 0.805 和 0.620；但 NDCG@5 从 0.7718 提升到 0.7751，NDCG@10 从 0.8042 提升到 0.8090，说明 coverage reranking 的第一版主要改善排序质量和 top-10 证据覆盖。下一步需要通过消融实验验证 graph expansion 和 coverage reranking 各自的贡献。
+
+## 面试讲法：Phase 4.5 做了什么
+
+Phase 4.5 我做的是 LightRAG controlled integration，不是把 `local_compat` 结果当成官方 LightRAG 成绩。这个阶段的目标是为外部 LightRAG 对照组准备统一接入层。
+
+实现上，我新增了 `LightRAGResultAdapter` 和 `LightRAGControlledRetriever`。adapter 负责把外部 LightRAG 可能返回的 `id`、`source_id`、`content`、`similarity` 等字段转换成项目统一的 `chunk_id`、`doc_id`、`text`、`score` schema。controlled retriever 则让 `method: lightrag` 可以进入原来的实验 runner，复用同一套 HotpotQA 数据、切块方式、top-k、指标计算和结果落盘。
+
+当前环境没有直接接入官方 LightRAG 的 metadata-preserving runner，所以我实现了 `backend: local_compat` 作为离线兼容后端，用 Hybrid RAG 验证完整评估管线。在 100 条样本上跑出的结果和 Hybrid RAG 接近，这是预期现象。它的价值是证明外部 LightRAG 后续只要能返回带 `chunk_id` 和 `doc_id` 的 evidence，就可以无缝进入同一套 Recall@k、NDCG@k 和 Full Evidence Recall@k 评估。
+
 ## 关键词解释
 
 - Vector RAG：只基于 embedding 相似度做文本 chunk 检索的基础 RAG baseline。

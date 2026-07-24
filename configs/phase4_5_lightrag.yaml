@@ -1,0 +1,29 @@
+seed: 42
+dataset_name: hotpotqa/hotpot_qa
+dataset_config: distractor
+split: validation
+sample_size: 100
+dataset_path: data/processed/hotpotqa_small.jsonl
+output_dir: results/phase4_5_lightrag_controlled
+
+chunking:
+  strategy: fixed
+  chunk_size: 64
+  overlap: 8
+
+embedding:
+  type: sentence_transformers
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  device: cpu
+
+retrieval:
+  method: lightrag
+  backend: local_compat
+  top_k: 10
+  candidate_k: 40
+  bm25_weight: 0.5
+  dense_weight: 0.5
+  fusion: weighted
+
+metrics:
+  k_values: [1, 3, 5, 10]

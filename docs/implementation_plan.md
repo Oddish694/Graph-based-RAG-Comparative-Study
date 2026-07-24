@@ -85,7 +85,7 @@ question
 Phase 2.5: Fair baseline + metrics upgrade
   -> Phase 3: GraphRAG-style baseline
   -> Phase 4: Evidence-aware Improved LightRAG
-  -> Phase 4.5: LightRAG controlled integration, optional
+  -> Phase 4.5: LightRAG controlled integration
   -> Phase 5: Ablation experiments
   -> Phase 6: Scale-up experiments + case study
   -> Phase 7: Final report + resume packaging
@@ -96,9 +96,9 @@ Phase 2.5: Fair baseline + metrics upgrade
 | 阶段 | 方法 / 工作 | 目标 | 优先级 |
 | --- | --- | --- | --- |
 | Phase 2.5 | Fair baseline + metrics upgrade | 统一 Vector / BM25 / Hybrid 配置，补齐更严格检索指标 | 最高 |
-| Phase 3 | GraphRAG-style baseline | 实现轻量实体关系图检索，进入项目主题 | 已完成基础版 |
-| Phase 4 | Evidence-aware Improved LightRAG | 实现图邻居扩展和证据覆盖感知重排序 | 已完成基础版 |
-| Phase 4.5 | LightRAG controlled integration | 将外部 LightRAG 纳入统一评估，作为可选对照组 | 中等 |
+| Phase 3 | GraphRAG-style baseline | 实现轻量实体关系图检索，进入项目主题 | 已完成可复现实验版本 |
+| Phase 4 | Evidence-aware Improved LightRAG | 实现图邻居扩展和证据覆盖感知重排序 | 已完成可复现实验版本 |
+| Phase 4.5 | LightRAG controlled integration | 将 LightRAG 对照组纳入统一评估接口 | 已完成可控接入层 |
 | Phase 5 | Ablation experiments | 验证每个改进模块是否真的有效 | 下一步 |
 | Phase 6 | Scale-up + case study | 扩大样本规模，并分析成功和失败案例 | 中等 |
 | Phase 7 | Reporting | 整理报告、README、简历材料和结果表格 | 最高 |
@@ -272,7 +272,7 @@ final_score = seed_score + graph_weight * graph_proximity_score
 
 ### 5.6 已完成内容与 100 samples 结果
 
-Phase 3 基础版已经完成：
+Phase 3 可复现实验版本已经完成：
 
 - 已实现 `SimpleEntityExtractor`，用轻量规则抽取大写专有名词和多词实体。
 - 已实现 `GraphIndex`，存储 entity-to-chunk、chunk-to-entity 和 entity co-occurrence graph。
@@ -383,7 +383,7 @@ final_score =
 
 ### 6.6 已完成内容与 100 samples 结果
 
-Phase 4 基础版已经完成：
+Phase 4 可复现实验版本已经完成：
 
 - 已实现 `CoverageAwareReranker`，支持 document coverage 和 entity coverage 奖励。
 - 已实现 `ImprovedLightRAGRetriever`，封装 GraphRAG-style candidate generation + coverage-aware reranking。
@@ -410,13 +410,13 @@ Top-10 对比：
 
 结论：Phase 4 基础版主要提升排序质量和 top-10 覆盖，`NDCG@5`、`NDCG@10`、`Recall@10` 和 `Full Evidence Recall@10` 相比 GraphRAG-style 有小幅提升。下一步需要进入 Phase 5 做系统消融，验证收益来自 graph expansion 还是 coverage reranking。
 
-## 7. Phase 4.5: LightRAG Controlled Integration, Optional
+## 7. Phase 4.5: LightRAG Controlled Integration
 
 ### 7.1 定位
 
-LightRAG controlled integration 保留为可选对照组，而不是当前主线。
+LightRAG controlled integration 用来把 LightRAG 对照组接入本项目统一评估框架，但它不是当前主线改进方法。
 
-原因：直接接入官方 LightRAG demo 的研究故事不如自己的 GraphRAG-style + Evidence-aware Improved LightRAG 清楚。但如果时间允许，LightRAG 可以作为外部方法对照。
+原因：直接接入官方 LightRAG demo 的研究故事不如自己的 GraphRAG-style + Evidence-aware Improved LightRAG 清楚。LightRAG 更适合作为外部方法对照，用来说明本项目方法和已有图增强 RAG 系统相比处在什么位置。
 
 ### 7.2 要求
 
@@ -436,6 +436,26 @@ LightRAG controlled integration 保留为可选对照组，而不是当前主线
 | `configs/phase4_5_lightrag.yaml` | LightRAG 实验配置 |
 | `experiments/run_phase4_5_lightrag.ps1` | 运行脚本 |
 | `tests/test_lightrag_adapter.py` | 数据适配测试 |
+
+### 7.3 已完成内容与 100 samples controlled result
+
+Phase 4.5 已经完成 controlled integration layer：
+
+- 已新增 `LightRAGResultAdapter`，把外部 LightRAG 结果转换为统一 retrieval result schema。
+- 已新增 `LightRAGControlledRetriever`，支持 `method: lightrag` 进入统一 runner。
+- 已支持 `backend: local_compat`，用于离线 smoke test 和指标管线验证。
+- 已预留 `backend: external`，后续可接入真实 LightRAG runner。
+- 已新增 `configs/phase4_5_lightrag.yaml` 和 `experiments/run_phase4_5_lightrag.ps1`。
+- 已新增 `tests/test_lightrag_adapter.py`。
+- 已在 100 条 HotpotQA validation fair baseline 设置下完成 controlled run。
+
+当前结果：
+
+| Method | Backend | Recall@5 | Precision@5 | NDCG@5 | MRR@5 | Full Evidence Recall@5 | Hit Rate@5 | Avg Latency |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| LightRAG controlled | local_compat | 0.790 | 0.316 | 0.7582 | 0.8995 | 0.590 | 0.990 | 0.0199s |
+
+注意：`local_compat` 使用 Hybrid RAG 作为离线兼容后端，因此这个结果不能作为官方 LightRAG 效果结论。它的意义是证明 LightRAG 对照组已经能进入统一数据、统一 top-k、统一指标和统一结果落盘流程。真实官方 LightRAG 对照需要后续提供 metadata-preserving external runner，并保证返回结果包含 `chunk_id` 和 `doc_id`。
 
 ## 8. Phase 5: Ablation Experiments
 
@@ -590,7 +610,7 @@ Retrieval Latency
 
 ## 12. 当前下一步执行清单
 
-Phase 4 Evidence-aware Improved LightRAG 基础版已经完成。下一步进入 Phase 5: Ablation experiments。
+Phase 4.5 LightRAG controlled integration 已经完成。下一步进入 Phase 5: Ablation experiments。
 
 建议按下面顺序实现：
 
