@@ -31,6 +31,9 @@ retrieval:
   seed_entity_weight: 0.25
   expansion_weight: 0.30
   distance_decay: 0.5
+  include_aliases: true
+  alias_policy: conservative
+  min_alias_token_length: 5
   bm25_weight: 0.5
   dense_weight: 0.5
   fusion: weighted

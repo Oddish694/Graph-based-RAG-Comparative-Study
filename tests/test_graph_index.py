@@ -43,6 +43,34 @@ class GraphIndexTest(unittest.TestCase):
         self.assertEqual(distances["rare entity"], 0)
         self.assertIn("bridge entity", distances)
 
+    def test_sentence_level_edges_do_not_connect_unrelated_sentences(self):
+        chunks = [
+            {
+                "chunk_id": "doc::0",
+                "doc_id": "Doc",
+                "title": "Doc",
+                "text": "Alpha Entity appears here. Target Entity appears later.",
+            }
+        ]
+        graph = build_graph_index(chunks, SimpleEntityExtractor())
+
+        self.assertEqual(graph.edge_weight("alpha entity", "target entity"), 0.0)
+
+    def test_weighted_edges_keep_evidence_sources(self):
+        chunks = [
+            {
+                "chunk_id": "doc::0",
+                "doc_id": "Doc",
+                "title": "Doc",
+                "text": "Alpha Entity connects Bridge Entity.",
+            }
+        ]
+        graph = build_graph_index(chunks, SimpleEntityExtractor())
+
+        self.assertGreater(graph.edge_weight("alpha entity", "bridge entity"), 0.0)
+        evidence = graph.edge_evidence("alpha entity", "bridge entity")
+        self.assertEqual(evidence[0]["chunk_id"], "doc::0")
+
 
 if __name__ == "__main__":
     unittest.main()

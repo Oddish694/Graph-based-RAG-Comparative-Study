@@ -59,9 +59,16 @@ class GraphRAGStyleRetriever:
         seed_entity_weight: float = 0.25,
         expansion_weight: float = 0.30,
         distance_decay: float = 0.5,
+        include_aliases: bool = True,
+        alias_policy: str = "conservative",
+        min_alias_token_length: int = 5,
     ) -> "GraphRAGStyleRetriever":
         chunk_list = [dict(chunk) for chunk in chunks]
-        extractor = SimpleEntityExtractor()
+        extractor = SimpleEntityExtractor(
+            include_aliases=include_aliases,
+            alias_policy=alias_policy,
+            min_alias_token_length=min_alias_token_length,
+        )
         graph_index = build_graph_index(chunk_list, extractor)
         seed_retriever = HybridRAGRetriever.from_chunks(
             chunk_list,
@@ -102,16 +109,18 @@ class GraphRAGStyleRetriever:
             depth=self.expansion_depth,
             max_neighbors_per_entity=self.max_neighbors_per_entity,
         )
-        query_entity_distances = self.graph_index.shortest_entity_distances(
+        query_entity_paths = self.graph_index.shortest_entity_paths(
             query_entities,
             depth=self.expansion_depth,
             max_neighbors_per_entity=self.max_neighbors_per_entity,
         )
-        seed_entity_distances = self.graph_index.shortest_entity_distances(
+        seed_entity_paths = self.graph_index.shortest_entity_paths(
             seed_entities,
             depth=self.expansion_depth,
             max_neighbors_per_entity=self.max_neighbors_per_entity,
         )
+        query_entity_distances = {entity: len(path) - 1 for entity, path in query_entity_paths.items()}
+        seed_entity_distances = {entity: len(path) - 1 for entity, path in seed_entity_paths.items()}
 
         seed_scores = _normalize_scores(seed_results)
         merged = _merge_by_chunk_id(seed_results, graph_candidates_by_entity)
@@ -148,6 +157,12 @@ class GraphRAGStyleRetriever:
             row["retriever_source"] = "graph_rag_style"
             row["matched_entities"] = sorted(chunk_entities & focus_entities)
             row["reachable_entities"] = sorted(chunk_entities & (set(query_entity_distances) | set(seed_entity_distances)))
+            row["graph_paths"] = _best_graph_paths(
+                chunk_entities,
+                query_entity_paths,
+                seed_entity_paths,
+                self.graph_index,
+            )
         return sorted(merged.values(), key=lambda item: item["score"], reverse=True)[:top_k]
 
 
@@ -190,6 +205,43 @@ def _distance_proximity_score(
     for entity in chunk_entities & set(entity_distances):
         numerator += graph_index.entity_weight(entity) * (distance_decay ** entity_distances[entity])
     return min(1.0, numerator / denominator)
+
+
+def _best_graph_paths(
+    chunk_entities: set[str],
+    query_entity_paths: dict[str, list[str]],
+    seed_entity_paths: dict[str, list[str]],
+    graph_index: GraphIndex,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for source_type, paths in (("query", query_entity_paths), ("seed", seed_entity_paths)):
+        for entity in chunk_entities & set(paths):
+            path = paths[entity]
+            candidates.append(
+                {
+                    "source": source_type,
+                    "target_entity": entity,
+                    "distance": len(path) - 1,
+                    "path": path,
+                    "path_edges": _path_edges(path, graph_index),
+                }
+            )
+    return sorted(candidates, key=lambda item: (item["distance"], item["source"], item["target_entity"]))[:limit]
+
+
+def _path_edges(path: list[str], graph_index: GraphIndex) -> list[dict[str, Any]]:
+    edges: list[dict[str, Any]] = []
+    for left, right in zip(path, path[1:]):
+        edges.append(
+            {
+                "left": left,
+                "right": right,
+                "weight": graph_index.edge_weight(left, right),
+                "evidence": graph_index.edge_evidence(left, right, limit=2),
+            }
+        )
+    return edges
 
 
 def _normalize_scores(results: list[dict[str, Any]]) -> dict[str, float]:

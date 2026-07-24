@@ -80,6 +80,7 @@ def run_retrieval_experiment(
                 "retrieved_doc_ids": json.dumps([row.get("doc_id") for row in retrieved], ensure_ascii=False),
                 "retrieved_chunk_ids": json.dumps([row.get("chunk_id") for row in retrieved], ensure_ascii=False),
                 "retrieved_scores": json.dumps([row.get("score") for row in retrieved], ensure_ascii=False),
+                "retrieved_graph_paths": json.dumps([row.get("graph_paths", []) for row in retrieved], ensure_ascii=False),
                 "retrieval_latency_seconds": latency_seconds,
                 **metrics,
             }
@@ -90,7 +91,7 @@ def run_retrieval_experiment(
     aggregate["index_time_seconds"] = index_time_seconds
     aggregate["num_samples"] = float(len(samples))
     aggregate["num_chunks"] = float(len(chunks))
-    if hasattr(retriever, "graph_index"):
+    if getattr(retriever, "graph_index", None) is not None:
         aggregate["graph_num_entities"] = float(retriever.graph_index.num_entities)
         aggregate["graph_num_edges"] = float(retriever.graph_index.num_edges)
     aggregate["avg_retrieval_latency_seconds"] = (
@@ -153,6 +154,9 @@ def build_retriever(
             seed_entity_weight=float(retrieval_config.get("seed_entity_weight", 0.25)),
             expansion_weight=float(retrieval_config.get("expansion_weight", 0.30)),
             distance_decay=float(retrieval_config.get("distance_decay", 0.5)),
+            include_aliases=_as_bool(retrieval_config.get("include_aliases", True)),
+            alias_policy=str(retrieval_config.get("alias_policy", "conservative")),
+            min_alias_token_length=int(retrieval_config.get("min_alias_token_length", 5)),
             bm25_weight=float(retrieval_config.get("bm25_weight", 0.5)),
             dense_weight=float(retrieval_config.get("dense_weight", 0.5)),
             fusion=str(retrieval_config.get("fusion", "weighted")).lower(),
@@ -172,6 +176,9 @@ def build_retriever(
             seed_entity_weight=float(retrieval_config.get("seed_entity_weight", 0.25)),
             expansion_weight=float(retrieval_config.get("expansion_weight", 0.30)),
             distance_decay=float(retrieval_config.get("distance_decay", 0.5)),
+            include_aliases=_as_bool(retrieval_config.get("include_aliases", True)),
+            alias_policy=str(retrieval_config.get("alias_policy", "conservative")),
+            min_alias_token_length=int(retrieval_config.get("min_alias_token_length", 5)),
             bm25_weight=float(retrieval_config.get("bm25_weight", 0.5)),
             dense_weight=float(retrieval_config.get("dense_weight", 0.5)),
             fusion=str(retrieval_config.get("fusion", "weighted")).lower(),

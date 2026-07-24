@@ -99,7 +99,7 @@ Phase 2.5: Fair baseline + metrics upgrade
 | Phase 3 | GraphRAG-style baseline | 实现轻量实体关系图检索，进入项目主题 | 已完成可复现实验版本 |
 | Phase 4 | Evidence-aware Improved LightRAG | 实现图邻居扩展和证据覆盖感知重排序 | 已完成可复现实验版本 |
 | Phase 4.5 | LightRAG controlled integration | 将 LightRAG 对照组纳入统一评估接口 | 已完成可控接入层 |
-| Phase 5 | Ablation experiments | 验证每个改进模块是否真的有效 | 下一步 |
+| Phase 5 | Ablation experiments | 验证每个改进模块是否真的有效 | 已完成 100-sample 初步消融 |
 | Phase 6 | Scale-up + case study | 扩大样本规模，并分析成功和失败案例 | 中等 |
 | Phase 7 | Reporting | 整理报告、README、简历材料和结果表格 | 最高 |
 
@@ -288,16 +288,16 @@ Phase 3 可复现实验版本已经完成：
 | Method | Recall@5 | Precision@5 | NDCG@5 | MRR@5 | Full Evidence Recall@5 | Hit Rate@5 | Avg Latency |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Hybrid RAG | 0.790 | 0.316 | 0.7582 | 0.8995 | 0.590 | 0.990 | 0.0213s |
-| GraphRAG-style | 0.805 | 0.322 | 0.7727 | 0.9125 | 0.620 | 0.990 | 0.0866s |
+| GraphRAG-style | 0.810 | 0.324 | 0.7730 | 0.9117 | 0.630 | 0.990 | 0.1355s |
 
 图统计：
 
 | Metric | Value |
 | --- | ---: |
-| Graph entities | 12767 |
-| Graph edges | 194354 |
-| Index / graph construction time | 24.52s |
-| Avg retrieval latency | 0.0866s |
+| Graph entities | 12560 |
+| Graph edges | 113065 |
+| Index / graph construction time | 21.75s |
+| Avg retrieval latency | 0.1355s |
 
 结论：增强后的 GraphRAG-style 在 top-5 证据召回、完整证据链召回和排序质量上超过 Hybrid RAG，并且在 top-10 上进一步提升 Recall 和 Full Evidence Recall。但实体图规模和查询延迟也更高，说明图扩展有价值，也需要通过 coverage-aware reranking、实体扩展上限和后续消融继续控制噪声和成本。
 
@@ -399,18 +399,18 @@ Phase 4 可复现实验版本已经完成：
 | Method | Recall@5 | Precision@5 | NDCG@5 | MRR@5 | Full Evidence Recall@5 | Hit Rate@5 | Avg Latency |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Hybrid RAG | 0.790 | 0.316 | 0.7582 | 0.8995 | 0.590 | 0.990 | 0.0213s |
-| GraphRAG-style | 0.805 | 0.322 | 0.7727 | 0.9125 | 0.620 | 0.990 | 0.0866s |
-| Improved LightRAG | 0.820 | 0.328 | 0.7851 | 0.9158 | 0.650 | 0.990 | 0.0584s |
+| GraphRAG-style | 0.810 | 0.324 | 0.7730 | 0.9117 | 0.630 | 0.990 | 0.1355s |
+| Improved LightRAG | 0.825 | 0.330 | 0.7834 | 0.9075 | 0.660 | 0.990 | 0.1087s |
 
 Top-10 对比：
 
 | Method | Recall@10 | Precision@10 | NDCG@10 | Full Evidence Recall@10 | Hit Rate@10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Hybrid RAG | 0.890 | 0.178 | 0.7988 | 0.780 | 1.000 |
-| GraphRAG-style | 0.905 | 0.181 | 0.8129 | 0.810 | 1.000 |
-| Improved LightRAG | 0.910 | 0.182 | 0.8209 | 0.820 | 1.000 |
+| GraphRAG-style | 0.920 | 0.184 | 0.8166 | 0.840 | 1.000 |
+| Improved LightRAG | 0.920 | 0.184 | 0.8209 | 0.840 | 1.000 |
 
-结论：增强图评分后，Phase 4 不只提升排序质量，也提升了 top-5 完整证据链召回。`Recall@5` 达到 0.820，`Full Evidence Recall@5` 达到 0.650，`NDCG@10` 达到 0.8209。下一步需要进入 Phase 5 做系统消融，验证收益分别来自 enhanced graph scoring、graph expansion 和 coverage reranking 的哪些部分。
+结论：句子级带权图和增强图评分后，Phase 4 不只提升排序质量，也提升了 top-5 完整证据链召回。`Recall@5` 达到 0.825，`Full Evidence Recall@5` 达到 0.660，`NDCG@10` 达到 0.8209。Phase 5 初步消融显示：关闭图扩展后结果回到 Hybrid 附近，关闭 coverage reranking 后结果回到 GraphRAG-style 附近。
 
 ## 7. Phase 4.5: LightRAG Controlled Integration
 
@@ -501,6 +501,38 @@ max_neighbors_per_entity = 3 / 5 / 10
 - `docs/ablation_analysis.md`
 - 方法模块贡献分析。
 - 效果与成本 trade-off 分析。
+
+### 8.6 已完成内容与 100 samples 初步消融结果
+
+Phase 5 初步消融已经完成：
+
+- 已新增 `configs/phase5_improved_lightrag_no_aliases.yaml`。
+- 已新增 `configs/phase5_improved_lightrag_no_graph_expansion.yaml`。
+- 已新增 `configs/phase5_improved_lightrag_no_coverage_reranking.yaml`。
+- 已新增 `configs/phase5_improved_lightrag_no_entity_coverage.yaml`。
+- 已新增 `experiments/run_phase5_ablations.ps1`。
+- 已新增 `src/evaluation/summarize_results.py`，用于汇总 aggregate metrics。
+- 已生成 `results/ablation_table.csv`。
+- 已新增 `docs/ablation_analysis.md`。
+
+核心结果：
+
+| Variant | Recall@5 | Precision@5 | NDCG@5 | Full Evidence Recall@5 | Recall@10 | Full Evidence Recall@10 | Latency |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Hybrid RAG | 0.790 | 0.316 | 0.7582 | 0.590 | 0.890 | 0.780 | 0.0211s |
+| GraphRAG-style | 0.810 | 0.324 | 0.7730 | 0.630 | 0.920 | 0.840 | 0.1355s |
+| Improved LightRAG | 0.825 | 0.330 | 0.7834 | 0.660 | 0.920 | 0.840 | 0.1087s |
+| w/o aliases | 0.790 | 0.316 | 0.7674 | 0.610 | 0.925 | 0.850 | 0.0782s |
+| w/o graph expansion | 0.790 | 0.316 | 0.7584 | 0.590 | 0.895 | 0.790 | 0.0219s |
+| w/o coverage reranking | 0.810 | 0.324 | 0.7730 | 0.630 | 0.920 | 0.840 | 0.1102s |
+| w/o entity coverage | 0.810 | 0.324 | 0.7759 | 0.630 | 0.925 | 0.850 | 0.1048s |
+
+初步结论：
+
+- 图扩展是主要收益来源。关闭图扩展后，结果基本回到 Hybrid RAG。
+- Coverage reranking 提升 top-5 完整证据覆盖。关闭 coverage reranking 后，结果基本回到 GraphRAG-style。
+- 别名是双刃剑。关闭别名会显著减少图规模，但 top-5 完整证据召回下降。
+- 当前 Phase 3 应定位为“带有稀有实体加权、句子级带权边和一跳距离衰减的轻量图感知检索 baseline”。
 
 ## 9. Phase 6: Scale-up Experiments + Case Study
 
@@ -612,7 +644,7 @@ Retrieval Latency
 
 ## 12. 当前下一步执行清单
 
-Phase 4.5 LightRAG controlled integration 已经完成。下一步进入 Phase 5: Ablation experiments。
+Phase 5 的 100-sample 初步消融已经完成。下一步建议进入 Phase 6: scale-up experiments + case study。
 
 建议按下面顺序实现：
 

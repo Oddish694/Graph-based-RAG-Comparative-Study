@@ -67,6 +67,26 @@ class GraphRetrievalTest(unittest.TestCase):
         self.assertTrue(any(row.get("query_entity_score", 0.0) > 0.0 for row in results))
         self.assertTrue(any(row.get("graph_proximity_score", 0.0) > 0.0 for row in results))
         self.assertTrue(all("reachable_entities" in row for row in results))
+        self.assertTrue(all("graph_paths" in row for row in results))
+
+    def test_graph_retriever_records_path_edges(self):
+        chunks = [
+            {"chunk_id": "a::0", "doc_id": "A", "title": "A", "text": "Alpha Entity connects Bridge Entity."},
+            {"chunk_id": "b::0", "doc_id": "B", "title": "B", "text": "Bridge Entity connects Target Entity."},
+        ]
+        retriever = GraphRAGStyleRetriever.from_chunks(
+            chunks,
+            embedding_model=HashingEmbeddingModel(dimensions=32),
+            expansion_depth=1,
+            graph_weight=1.0,
+            seed_weight=0.0,
+        )
+
+        results = retriever.retrieve("Alpha Entity", top_k=2, candidate_k=2)
+
+        path_rows = [row for row in results if row.get("graph_paths")]
+        self.assertTrue(path_rows)
+        self.assertIn("path_edges", path_rows[0]["graph_paths"][0])
 
 
 if __name__ == "__main__":

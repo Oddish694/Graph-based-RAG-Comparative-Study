@@ -45,6 +45,9 @@ class ImprovedLightRAGRetriever:
         seed_entity_weight: float = 0.25,
         expansion_weight: float = 0.30,
         distance_decay: float = 0.5,
+        include_aliases: bool = True,
+        alias_policy: str = "conservative",
+        min_alias_token_length: int = 5,
         candidate_pool_size: int = 40,
         coverage_weight: float = 0.15,
         entity_coverage_weight: float = 0.10,
@@ -74,6 +77,9 @@ class ImprovedLightRAGRetriever:
                 seed_entity_weight=seed_entity_weight,
                 expansion_weight=expansion_weight,
                 distance_decay=distance_decay,
+                include_aliases=include_aliases,
+                alias_policy=alias_policy,
+                min_alias_token_length=min_alias_token_length,
             )
         else:
             seed_retriever = HybridRAGRetriever.from_chunks(

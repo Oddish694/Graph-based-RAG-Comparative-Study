@@ -32,6 +32,13 @@ class EntityExtractorTest(unittest.TestCase):
         self.assertIn("new york city", entities)
         self.assertIn("nyc", entities)
 
+    def test_can_disable_alias_expansion(self):
+        extractor = SimpleEntityExtractor(include_aliases=False)
+        entities = extractor.extract("Charles Babbage designed the Analytical Engine.")
+
+        self.assertIn("charles babbage", entities)
+        self.assertNotIn("babbage", entities)
+
 
 if __name__ == "__main__":
     unittest.main()

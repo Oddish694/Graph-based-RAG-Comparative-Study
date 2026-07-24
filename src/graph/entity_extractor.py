@@ -89,9 +89,17 @@ def normalize_entity(entity: str) -> str:
 
 
 class SimpleEntityExtractor:
-    def __init__(self, min_token_length: int = 2, include_aliases: bool = True):
+    def __init__(
+        self,
+        min_token_length: int = 2,
+        include_aliases: bool = True,
+        alias_policy: str = "conservative",
+        min_alias_token_length: int = 5,
+    ):
         self.min_token_length = min_token_length
         self.include_aliases = include_aliases
+        self.alias_policy = alias_policy
+        self.min_alias_token_length = min_alias_token_length
 
     def extract(self, text: str) -> list[str]:
         entities: list[str] = []
@@ -140,12 +148,20 @@ class SimpleEntityExtractor:
             return []
         aliases = [entity]
         tokens = entity.split()
-        if not self.include_aliases or len(tokens) < 2:
+        if not self.include_aliases or self.alias_policy == "none" or len(tokens) < 2:
             return aliases
         last_token = tokens[-1]
-        if len(tokens) == 2 and len(last_token) >= 4 and last_token not in STOP_ENTITIES | GENERIC_ALIAS_TAILS:
+        allow_tail_alias = (
+            self.alias_policy == "aggressive"
+            or (self.alias_policy == "conservative" and len(tokens) == 2)
+        )
+        if (
+            allow_tail_alias
+            and len(last_token) >= self.min_alias_token_length
+            and last_token not in STOP_ENTITIES | GENERIC_ALIAS_TAILS
+        ):
             aliases.append(last_token)
         acronym = "".join(token[0] for token in tokens if token and token not in STOP_ENTITIES)
-        if len(acronym) >= 2:
+        if 2 <= len(acronym) <= 8:
             aliases.append(acronym)
         return aliases
