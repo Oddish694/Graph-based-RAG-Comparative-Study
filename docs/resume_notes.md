@@ -8,7 +8,7 @@
 - 实现 Vector RAG、BM25 lexical retrieval 与 Hybrid RAG baseline，支持 sentence-transformers 向量编码、BM25 关键词检索、weighted score fusion 和 reciprocal rank fusion。
 - 设计 fair baseline 实验配置，统一 Vector / BM25 / Hybrid 的数据集、sample size、seed、chunk size、overlap、top-k 和指标设置，避免方法差异被配置差异干扰。
 - 扩展 retrieval metrics，实现 Recall@k、Precision@k、MRR@k、NDCG@k、Hit Rate@k、Evidence Hit Count@k、Full Evidence Recall@k 和 Retrieved Context Tokens，用于评估多跳证据覆盖、排序质量、噪声和上下文成本。
-- 在 100 条 HotpotQA validation 样本上完成公平对比：Hybrid RAG 取得 Recall@5 0.790、Full Evidence Recall@5 0.590、NDCG@5 0.7582，优于 Vector RAG 和 BM25。进一步实现轻量 GraphRAG-style baseline，通过实体图邻居扩展将 Recall@5 提升到 0.805、Full Evidence Recall@5 提升到 0.620。
+- 在 100 条 HotpotQA validation 样本上完成公平对比：Hybrid RAG 取得 Recall@5 0.790、Full Evidence Recall@5 0.590、NDCG@5 0.7582，优于 Vector RAG 和 BM25。进一步实现轻量 GraphRAG-style baseline，通过实体图邻居扩展将 Recall@5 提升到 0.805、Full Evidence Recall@5 提升到 0.620；在此基础上实现 Improved LightRAG-style coverage reranking，将 NDCG@10 提升到 0.8090。
 - 使用 YAML 配置驱动实验流程，输出 per-query CSV 和 aggregate metrics JSON，并通过单元测试覆盖 loader、chunker、BM25 index、hybrid retriever、runner 和 retrieval metrics。
 
 ## English Resume Version
@@ -19,7 +19,7 @@ Graph-based RAG Frameworks: Reproduction, Comparative Study and Ablation Analysi
 - Implemented Vector RAG, BM25 lexical retrieval and Hybrid RAG baselines with Sentence-Transformers embeddings, BM25 scoring, weighted score fusion and reciprocal rank fusion.
 - Designed fair baseline configurations that unify dataset, sample size, seed, chunk size, overlap, top-k and metrics across Vector / BM25 / Hybrid retrieval.
 - Extended retrieval evaluation with Recall@k, Precision@k, MRR@k, NDCG@k, Hit Rate@k, Evidence Hit Count@k, Full Evidence Recall@k and Retrieved Context Tokens to measure multi-hop evidence coverage, ranking quality, noise and context cost.
-- Evaluated on 100 HotpotQA validation samples. Hybrid RAG achieved Recall@5 of 0.790, Full Evidence Recall@5 of 0.590 and NDCG@5 of 0.7582. A lightweight GraphRAG-style baseline further improved Recall@5 to 0.805 and Full Evidence Recall@5 to 0.620 through entity-graph neighbor expansion.
+- Evaluated on 100 HotpotQA validation samples. Hybrid RAG achieved Recall@5 of 0.790, Full Evidence Recall@5 of 0.590 and NDCG@5 of 0.7582. A lightweight GraphRAG-style baseline further improved Recall@5 to 0.805 and Full Evidence Recall@5 to 0.620 through entity-graph neighbor expansion. Improved LightRAG-style coverage reranking further improved NDCG@10 to 0.8090.
 - Designed YAML-driven experiments with per-query CSV and aggregate JSON outputs, backed by unit tests for data loading, chunking, indexing, retrieval and metric computation.
 
 ## 面试讲法：项目整体在做什么
@@ -64,6 +64,14 @@ Phase 3 我实现了一个轻量 GraphRAG-style baseline。它不是完整复现
 实现上，我先用规则抽取大写专有名词和多词实体，例如 `Ada Lovelace`、`Analytical Engine`、`Charles Babbage`。然后构建 `GraphIndex`，维护 entity-to-chunk、chunk-to-entity 和 entity co-occurrence graph。检索时先用 Hybrid RAG 找 seed chunks，再从 query entities 和 seed chunk entities 出发做图邻居扩展，最后融合 seed score 和 graph score。
 
 在 100 条 HotpotQA validation fair baseline 设置下，GraphRAG-style 的 Recall@5 达到 0.805，Full Evidence Recall@5 达到 0.620，NDCG@5 达到 0.7718，相比 Hybrid RAG 的 0.790、0.590、0.7582 有小幅提升。这说明图邻居扩展对多跳证据召回有帮助，但平均检索延迟也从 0.0213s 增加到 0.0410s。因此下一阶段要做 Evidence-aware Graph Expansion 和 Coverage-aware Reranking，进一步控制图扩展噪声和成本。
+
+## 面试讲法：Phase 4 做了什么
+
+Phase 4 我在 GraphRAG-style baseline 上实现了一个 Improved LightRAG-style retriever。这里的 Improved LightRAG 不是官方 LightRAG 的直接复现，而是我针对多跳证据召回设计的轻量改进版本。
+
+它的流程是：先用 GraphRAG-style 生成候选池，也就是 Hybrid seed retrieval 加图邻居扩展；然后对候选结果做 coverage-aware reranking。重排序时不仅看原始相关性分数，还会给尚未覆盖的 document 和新的 matched entities 轻微加分，鼓励 top-k 结果覆盖更多不同证据来源。
+
+在 100 条 HotpotQA validation fair baseline 设置下，Improved LightRAG 的 Recall@5 和 Full Evidence Recall@5 与 GraphRAG-style 持平，分别是 0.805 和 0.620；但 NDCG@5 从 0.7718 提升到 0.7751，NDCG@10 从 0.8042 提升到 0.8090，说明 coverage reranking 的第一版主要改善排序质量和 top-10 证据覆盖。下一步需要通过消融实验验证 graph expansion 和 coverage reranking 各自的贡献。
 ## 关键词解释
 
 - Vector RAG：只基于 embedding 相似度做文本 chunk 检索的基础 RAG baseline。
@@ -77,4 +85,5 @@ Phase 3 我实现了一个轻量 GraphRAG-style baseline。它不是完整复现
 - NDCG@k：相关证据整体排序质量。
 - Hit Rate@k：top-k 里是否至少命中一个相关证据。
 - Full Evidence Recall@k：top-k 里是否找全当前问题需要的全部 supporting evidence。
+
 

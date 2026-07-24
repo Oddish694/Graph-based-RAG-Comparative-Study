@@ -14,6 +14,7 @@ from src.indexing.vector_index import HashingEmbeddingModel, SentenceTransformer
 from src.retrieval.bm25_rag import BM25RAGRetriever
 from src.retrieval.graph_rag_style import GraphRAGStyleRetriever
 from src.retrieval.hybrid_rag import HybridRAGRetriever
+from src.retrieval.improved_lightrag import ImprovedLightRAGRetriever
 from src.retrieval.vector_rag import VectorRAGRetriever
 
 
@@ -46,7 +47,7 @@ def run_retrieval_experiment(
     retrieval_config = config.get("retrieval", {})
     method = str(retrieval_config.get("method", default_method)).lower()
     embedding_model = None
-    if method in {"vector", "dense", "hybrid", "graph_rag_style", "graph"}:
+    if method in {"vector", "dense", "hybrid", "graph_rag_style", "graph", "improved_lightrag"}:
         embedding_model = build_embedding_model(config.get("embedding", {}))
 
     index_start = time.perf_counter()
@@ -62,7 +63,7 @@ def run_retrieval_experiment(
     per_query_rows: list[dict[str, Any]] = []
     for sample in samples:
         query_start = time.perf_counter()
-        if method in {"hybrid", "graph_rag_style", "graph"}:
+        if method in {"hybrid", "graph_rag_style", "graph", "improved_lightrag"}:
             retrieved = retriever.retrieve(sample.question, top_k=top_k, candidate_k=candidate_k)
         else:
             retrieved = retriever.retrieve(sample.question, top_k=top_k)
@@ -151,7 +152,37 @@ def build_retriever(
             fusion=str(retrieval_config.get("fusion", "weighted")).lower(),
             rrf_k=int(retrieval_config.get("rrf_k", 60)),
         )
+    if method == "improved_lightrag":
+        return ImprovedLightRAGRetriever.from_chunks(
+            chunks,
+            embedding_model=embedding_model,
+            seed_top_k=int(retrieval_config.get("seed_top_k", 10)),
+            expansion_depth=int(retrieval_config.get("expansion_depth", 1)),
+            max_neighbors_per_entity=int(retrieval_config.get("max_neighbors_per_entity", 10)),
+            seed_weight=float(retrieval_config.get("seed_weight", 0.7)),
+            graph_weight=float(retrieval_config.get("graph_weight", 0.3)),
+            bm25_weight=float(retrieval_config.get("bm25_weight", 0.5)),
+            dense_weight=float(retrieval_config.get("dense_weight", 0.5)),
+            fusion=str(retrieval_config.get("fusion", "weighted")).lower(),
+            rrf_k=int(retrieval_config.get("rrf_k", 60)),
+            candidate_pool_size=int(
+                retrieval_config.get("candidate_pool_size", retrieval_config.get("candidate_k", 40))
+            ),
+            coverage_weight=float(retrieval_config.get("coverage_weight", 0.15)),
+            entity_coverage_weight=float(retrieval_config.get("entity_coverage_weight", 0.10)),
+            relevance_weight=float(retrieval_config.get("relevance_weight", 1.0)),
+            use_graph_expansion=_as_bool(retrieval_config.get("use_graph_expansion", True)),
+            use_coverage_reranking=_as_bool(retrieval_config.get("use_coverage_reranking", True)),
+        )
     raise ValueError(f"Unsupported retrieval method: {method}")
+
+
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    return bool(value)
 
 
 def build_embedding_model(config: dict[str, Any]) -> Any:
@@ -204,6 +235,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
 

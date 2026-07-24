@@ -97,9 +97,9 @@ Phase 2.5: Fair baseline + metrics upgrade
 | --- | --- | --- | --- |
 | Phase 2.5 | Fair baseline + metrics upgrade | 统一 Vector / BM25 / Hybrid 配置，补齐更严格检索指标 | 最高 |
 | Phase 3 | GraphRAG-style baseline | 实现轻量实体关系图检索，进入项目主题 | 已完成基础版 |
-| Phase 4 | Evidence-aware Improved LightRAG | 实现图邻居扩展和证据覆盖感知重排序 | 下一步 |
+| Phase 4 | Evidence-aware Improved LightRAG | 实现图邻居扩展和证据覆盖感知重排序 | 已完成基础版 |
 | Phase 4.5 | LightRAG controlled integration | 将外部 LightRAG 纳入统一评估，作为可选对照组 | 中等 |
-| Phase 5 | Ablation experiments | 验证每个改进模块是否真的有效 | 最高 |
+| Phase 5 | Ablation experiments | 验证每个改进模块是否真的有效 | 下一步 |
 | Phase 6 | Scale-up + case study | 扩大样本规模，并分析成功和失败案例 | 中等 |
 | Phase 7 | Reporting | 整理报告、README、简历材料和结果表格 | 最高 |
 
@@ -381,6 +381,35 @@ final_score =
 - Full Evidence Recall@k 和 Precision@k 的重点分析。
 - 图扩展带来的延迟和噪声分析。
 
+### 6.6 已完成内容与 100 samples 结果
+
+Phase 4 基础版已经完成：
+
+- 已实现 `CoverageAwareReranker`，支持 document coverage 和 entity coverage 奖励。
+- 已实现 `ImprovedLightRAGRetriever`，封装 GraphRAG-style candidate generation + coverage-aware reranking。
+- 已支持 `use_graph_expansion` 和 `use_coverage_reranking` 两个消融开关。
+- 已新增 `configs/phase4_improved_lightrag.yaml` 和 `experiments/run_phase4_improved_lightrag.ps1`。
+- 已新增 coverage reranker、Improved LightRAG 和 Phase 4 runner 测试。
+- 已在 100 条 HotpotQA validation fair baseline 设置下完成实验。
+
+与 Hybrid RAG 和 GraphRAG-style 对比：
+
+| Method | Recall@5 | Precision@5 | NDCG@5 | MRR@5 | Full Evidence Recall@5 | Hit Rate@5 | Avg Latency |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Hybrid RAG | 0.790 | 0.316 | 0.7582 | 0.8995 | 0.590 | 0.990 | 0.0213s |
+| GraphRAG-style | 0.805 | 0.322 | 0.7718 | 0.9095 | 0.620 | 0.990 | 0.0410s |
+| Improved LightRAG | 0.805 | 0.322 | 0.7751 | 0.9095 | 0.620 | 0.990 | 0.0306s |
+
+Top-10 对比：
+
+| Method | Recall@10 | Precision@10 | NDCG@10 | Full Evidence Recall@10 | Hit Rate@10 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Hybrid RAG | 0.890 | 0.178 | 0.7988 | 0.780 | 1.000 |
+| GraphRAG-style | 0.885 | 0.177 | 0.8042 | 0.770 | 1.000 |
+| Improved LightRAG | 0.890 | 0.178 | 0.8090 | 0.780 | 1.000 |
+
+结论：Phase 4 基础版主要提升排序质量和 top-10 覆盖，`NDCG@5`、`NDCG@10`、`Recall@10` 和 `Full Evidence Recall@10` 相比 GraphRAG-style 有小幅提升。下一步需要进入 Phase 5 做系统消融，验证收益来自 graph expansion 还是 coverage reranking。
+
 ## 7. Phase 4.5: LightRAG Controlled Integration, Optional
 
 ### 7.1 定位
@@ -561,18 +590,16 @@ Retrieval Latency
 
 ## 12. 当前下一步执行清单
 
-Phase 3 GraphRAG-style baseline 基础版已经完成。下一步进入 Phase 4: Evidence-aware Improved LightRAG。
+Phase 4 Evidence-aware Improved LightRAG 基础版已经完成。下一步进入 Phase 5: Ablation experiments。
 
 建议按下面顺序实现：
 
-1. 新增 `src/retrieval/coverage_reranker.py`，实现覆盖感知重排序，鼓励 top-k 覆盖不同文档和实体簇。
-2. 新增 `src/retrieval/improved_lightrag.py`，封装 Hybrid seed retrieval + graph expansion + coverage reranking。
-3. 支持配置 `expansion_depth`、`max_neighbors_per_entity`、`entity_overlap_weight`、`graph_distance_weight`、`coverage_weight`。
-4. 新增 `configs/phase4_improved_lightrag.yaml` 和运行脚本。
-5. 补充 `tests/test_coverage_reranker.py`、`tests/test_improved_lightrag.py`。
-6. 在 100 条 HotpotQA fair baseline 设置下比较 Improved LightRAG、GraphRAG-style 和 Hybrid RAG。
-7. 做消融：w/o graph expansion、w/o coverage reranking、depth=1 vs depth=2。
-8. 如果 Phase 4 有提升，再扩展到 500 条样本并做 case study。
+1. 新增消融配置：`phase5_improved_lightrag_no_graph.yaml`、`phase5_improved_lightrag_no_coverage.yaml`、`phase5_improved_lightrag_depth2.yaml`。
+2. 新增 `experiments/run_phase5_ablations.ps1`，一次性跑 Hybrid、GraphRAG-style、Improved LightRAG 和消融变体。
+3. 汇总 `results/*/aggregate_metrics.json`，生成 `results/ablation_table.csv`。
+4. 分析 `Full Evidence Recall@5`、`NDCG@5`、`Precision@5`、`Retrieval Latency` 的变化。
+5. 更新 `docs/ablation_analysis.md`，解释 graph expansion 和 coverage reranking 的模块贡献。
+6. 如果消融结果稳定，再扩展到 500 条样本。
 
 ## 13. 简历叙事方向
 
@@ -583,5 +610,6 @@ Phase 3 GraphRAG-style baseline 基础版已经完成。下一步进入 Phase 4:
 完成后续主线后，可以升级为：
 
 > 构建面向 HotpotQA 多跳问答的可复现 RAG 对比实验框架，统一实现 Vector RAG、BM25、Hybrid RAG 与 GraphRAG-style 检索方法，并提出 Evidence-aware Improved LightRAG，通过图邻居扩展与证据覆盖感知重排序提升 supporting facts 完整召回。设计 Recall@k、Precision@k、MRR、NDCG、Full Evidence Recall、检索延迟等指标，在统一配置下完成多方法对比与消融实验，分析图增强检索在多跳问答中的效果与成本权衡。
+
 
 
